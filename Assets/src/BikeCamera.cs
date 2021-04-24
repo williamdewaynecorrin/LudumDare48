@@ -15,6 +15,9 @@ public class BikeCamera : MonoBehaviour
     private float positionsmoothing = 10.0f;
     [SerializeField]
     private float rotationsmoothing = 10.0f;
+    [Range(0f, 1f)]
+    [SerializeField]
+    private float playerlookweight = 0.5f;
 
     private Vector3 offsetmax, offsetmin;
     private Vector3 nextpos;
@@ -38,7 +41,8 @@ public class BikeCamera : MonoBehaviour
         transform.position = Vector3.Lerp(transform.position, nextpos, Time.deltaTime * positionsmoothing);
 
         // -- update camera rotation
-        nextrot = Quaternion.LookRotation(target.transform.forward, Vector3.up) * initialoffsetr;
+        Vector3 combinedlook = target.transform.forward * (1 - playerlookweight) + (target.transform.position - transform.position).normalized * playerlookweight;
+        nextrot = Quaternion.LookRotation(combinedlook, Vector3.up) * initialoffsetr;
         transform.rotation = Quaternion.Slerp(transform.rotation, nextrot, Time.deltaTime * rotationsmoothing);
     }
 }

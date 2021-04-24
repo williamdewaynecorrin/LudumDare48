@@ -9,17 +9,17 @@ public class BikePlayer : MonoBehaviour
     //==================================================================================================================================================
     [Header("Wheels")]
     [SerializeField]
-    private WheelCollider frontwheel;
+    private BikeWheel frontwheelmesh;
     [SerializeField]
-    private WheelCollider backwheel;
+    private BikeWheel backwheelmesh;
     [SerializeField]
-    private MeshRenderer frontwheelmesh;
+    private float maxmotortorque = 1000f;
     [SerializeField]
-    private MeshRenderer backwheelmesh;
+    private float stopfrictionmotortorque = 0.8f;
 
     [Header("Physics Values")]
     [SerializeField]
-    private float torque = 200f;
+    private float basetorque = 200f;
     [SerializeField]
     private float acceleration = 1.0f;
     [SerializeField]
@@ -29,16 +29,49 @@ public class BikePlayer : MonoBehaviour
     [SerializeField]
     private float lateralmult = 0.075f;
 
+    [Header("Ground Detection")]
+    [SerializeField]
+    private SphereCollider groundsphere;
+    [SerializeField]
+    private LayerMask groundmask;
+
+    [Header("Wall Detection")]
+    [SerializeField]
+    private SphereCollider wallsphere;
+    [SerializeField]
+    private LayerMask wallmask;
+
     [SerializeField]
     private float rotationsmoothing = 10.0f;
+    [Range(0f, 1f)]
+    [SerializeField]
+    private float bikeuprightbias = 0.6f;
 
+    [Range(-10f, 10f)]
+    [SerializeField]
+    private float magicgroundnumber = 1.0f;
+    [Range(-10f, 10f)]
+    [SerializeField]
+    private float magicwallnumber = 1.0f;
+    
     private new Rigidbody rigidbody;
     private Vector3 currentvelocity;
     private Vector3 lookdirection;
     private Vector2 framemovementinput;
     private bool grounded = false;
+    private bool wasgrounded = false;
     private bool framehasinput = false;
     private Vector3 tirecolliderinitiallocalpos;
+    private float currentmotortorque;
+    private Vector3 bikeuprightrot;
+
+    private Vector3 spherecenter;
+    private float castdist;
+    private ECurrentGroundStatus groundstatus = ECurrentGroundStatus.InAir;
+    private Vector3 wallspherecenter;
+    private float wallcastdist;
+    private Vector3 lastwallbinormal;
+    private bool runningintowall = false;
 
     //==================================================================================================================================================
     // -- Initialization methods
@@ -47,7 +80,7 @@ public class BikePlayer : MonoBehaviour
     {
         rigidbody = GetComponent<Rigidbody>();
         lookdirection = transform.forward;
-        tirecolliderinitiallocalpos = frontwheel.transform.localPosition;
+        bikeuprightrot = transform.eulerAngles;
     }
 
     void Start()
@@ -64,9 +97,10 @@ public class BikePlayer : MonoBehaviour
         framehasinput = framemovementinput != Vector2.zero;
 
         if (framehasinput)
-        {
-            Quaternion targetrotation = Quaternion.LookRotation(lookdirection, Vector3.up);
-            //transform.rotation = Quaternion.Slerp(transform.rotation, targetrotation, rotationsmoothing * Time.deltaTime);
+        {                                                                       
+            Vector3 weightedlookdir = lookdirection * (1f - bikeuprightbias) + bikeuprightrot * bikeuprightbias;
+            Quaternion targetrotation = Quaternion.LookRotation(weightedlookdir, Vector3.up);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetrotation, rotationsmoothing * Time.deltaTime);
         }
     }
 
@@ -88,22 +122,96 @@ public class BikePlayer : MonoBehaviour
     //==================================================================================================================================================
     void FixedUpdate()
     {
-        // -- movement logic
-        Vector3 right = Vector3.right; // change to camera.right later
-        Vector3 forward = Vector3.forward; // change to camera.forward later
+        // -- check for walls
+        WallCheck(out RaycastHit wallhit);
 
-        Vector3 framevelocity = CalculateWheelAccel(right * lateralmult, forward);
-        if (framevelocity == Vector3.zero)
-            currentvelocity *= stopfriction;
+        // -- check for grounded
+        GroundedCheck(out RaycastHit groundhit);
+
+        if (grounded)
+        {
+            if(!wasgrounded)
+            {
+                OnGroundLand();
+            }
+
+            rigidbody.velocity = Vector3.zero;
+            PositionPlayerOnPoint(spherecenter, groundhit);
+
+            // -- movement logic
+            Vector3 right = Vector3.right; // change to camera.right later
+            Vector3 forward = Vector3.forward; // change to camera.forward later
+
+            Vector3 framevelocity = CalculateWheelAccel(right * lateralmult, forward);
+            if (framevelocity == Vector3.zero)
+            {
+                currentvelocity *= stopfriction;
+                currentmotortorque *= stopfrictionmotortorque;
+            }
+            else
+            {
+                currentvelocity += framevelocity;
+                currentvelocity = Vector3.ClampMagnitude(currentvelocity, maxspeed);
+                currentmotortorque = Mathf.Clamp(currentmotortorque, -maxmotortorque, maxmotortorque);
+            }
+        }
         else
         {
-            currentvelocity += framevelocity;
-            currentvelocity = Vector3.ClampMagnitude(currentvelocity, maxspeed);
+            // -- gravity logic
+            rigidbody.velocity += PhysicsManager.gravity;
         }
 
-        //transform.position += currentvelocity;
+        transform.position += currentvelocity;
         if (currentvelocity != Vector3.zero)
             lookdirection = currentvelocity.normalized;
+
+        wasgrounded = grounded;
+    }
+
+    private void GroundedCheck(out RaycastHit groundhit)
+    {
+        Vector3 direction = Vector3.down;
+        castdist = Mathf.Max(groundsphere.radius * 1.01f, rigidbody.velocity.OnlyY().magnitude * magicgroundnumber);
+        spherecenter = groundsphere.transform.position + groundsphere.center;
+
+        if (Physics.SphereCast(spherecenter, groundsphere.radius, direction, out groundhit, castdist, groundmask, QueryTriggerInteraction.Ignore))
+        {
+            grounded = true;
+
+            // -- do angle test later
+            float angle = Mathf.Abs(Vector3.Angle(groundhit.normal, Vector3.up));
+            groundstatus = ECurrentGroundStatus.Grounded;
+        }
+        else
+        {
+            grounded = false;
+            groundstatus = ECurrentGroundStatus.InAir;
+        }
+    }
+
+    private void WallCheck(out RaycastHit wallhit)
+    {
+        Vector3 direction = currentvelocity.normalized;
+        wallcastdist = Mathf.Max(wallsphere.radius * 1.01f, currentvelocity.magnitude * magicwallnumber);
+        wallspherecenter = wallsphere.transform.position + wallsphere.center;
+
+        if (Physics.SphereCast(wallspherecenter, wallsphere.radius, direction, out wallhit, wallcastdist, wallmask, QueryTriggerInteraction.Ignore))
+        {
+            Vector3 wallnormal = wallhit.normal;
+            Vector3 temp = Vector3.Cross(wallnormal, currentvelocity.normalized);
+            Vector3 wallbinormal = Vector3.Cross(temp, wallnormal);
+            lastwallbinormal = wallbinormal;
+
+            currentvelocity = Vector3.Project(currentvelocity, wallbinormal);
+            transform.position += wallnormal * 0.01f;
+
+            // -- do angle test later
+            float angle = Mathf.Abs(Vector3.Angle(wallnormal, Vector3.up));
+
+            runningintowall = true;
+        }
+        else
+            runningintowall = false;
     }
 
     private Vector3 CalculateWheelAccel(Vector3 right, Vector3 forward)
@@ -112,22 +220,25 @@ public class BikePlayer : MonoBehaviour
         framemovement *= acceleration;
 
         // -- apply torque to all wheels
-        float motortorque = framemovementinput.y * torque;
-        frontwheel.motorTorque = motortorque;
-        backwheel.motorTorque = motortorque;
-
-        // -- apply pose to real wheels
-        Vector3 offset = Vector3.right * -tirecolliderinitiallocalpos.x;
-        Quaternion offsetr = Quaternion.Euler(0f, 90f, 0f);
-        frontwheel.GetWorldPose(out Vector3 posfront, out Quaternion rotfront);
-        frontwheelmesh.transform.position = posfront + offset;
-        frontwheelmesh.transform.rotation = rotfront * offsetr;
-
-        backwheel.GetWorldPose(out Vector3 posback, out Quaternion rotback);
-        backwheelmesh.transform.position = posback + offset;
-        backwheelmesh.transform.rotation = rotback * offsetr;
+        currentmotortorque += framemovementinput.y * basetorque;
+        frontwheelmesh.SetTorque(currentmotortorque);
+        backwheelmesh.SetTorque(currentmotortorque);
 
         return framemovement;
+    }
+
+    private void OnGroundLand()
+    {
+
+    }
+
+    private void PositionPlayerOnPoint(Vector3 spherecenter, RaycastHit hit)
+    {
+        Vector3 pointonsphere = spherecenter + (hit.point - spherecenter).normalized * groundsphere.radius;
+        Vector3 pointtobot = (spherecenter + Vector3.down * groundsphere.radius) - pointonsphere;
+
+        Vector3 spherecasterbump = -groundsphere.transform.localPosition - groundsphere.center * 1.01f + Vector3.up * groundsphere.radius * 1.01f;
+        transform.position = spherecasterbump + hit.point + pointtobot;
     }
 
     //==================================================================================================================================================
@@ -143,5 +254,34 @@ public class BikePlayer : MonoBehaviour
 
         GUI.TextField(baserect, string.Format("Grounded?: {0}", grounded));
         baserect.y += debuglineheight;
+
+        GUI.TextField(baserect, string.Format("Running Into Wall?: {0}", runningintowall));
+        baserect.y += debuglineheight;
+
+        GUI.TextField(baserect, string.Format("Motor Torque: {0}", currentmotortorque));
+        baserect.y += debuglineheight;
     }
+
+    private void OnDrawGizmos()
+    {
+        if (!Application.isPlaying)
+            return;
+        
+        // -- red is for ground
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(spherecenter, groundsphere.radius);
+        Gizmos.DrawLine(spherecenter, spherecenter + Vector3.down * castdist);
+
+        // -- green is for walls
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireSphere(wallspherecenter, wallsphere.radius);
+        Gizmos.DrawLine(wallspherecenter, wallspherecenter + currentvelocity.normalized * wallcastdist);
+    }
+}
+
+public enum ECurrentGroundStatus
+{
+    InAir = 0,
+    Grounded = 1,
+    OnRamp = 2
 }
