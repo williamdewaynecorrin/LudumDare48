@@ -18,6 +18,8 @@ public class BikePlayer : MonoBehaviour
     private float maxmotortorque = 1000f;
     [SerializeField]
     private float stopfrictionmotortorque = 0.8f;
+    [SerializeField]
+    private new BikeCamera camera;
 
     [Header("Physics Values")]
     [SerializeField]
@@ -28,9 +30,19 @@ public class BikePlayer : MonoBehaviour
     private float stopfriction = 0.7f;
     [SerializeField] 
     private float maxspeed = 0.2f;
-    [SerializeField]
-    private float lateralmult = 0.075f;
 
+    [Header("Bike Tilting")]
+    [SerializeField]
+    private float lateralacceleration = 0.075f;
+    [SerializeField]
+    private float lateraltiltamt = 1f;
+    [SerializeField]
+    private float lateraltiltmax = 45f;
+    [SerializeField]
+    private float biketiltsmoothing = 10.0f;
+    [SerializeField]
+    private float stopfrictionbiketilt = 0.9f;
+    
     [Header("Ground Detection")]
     [SerializeField]
     private LayerMask groundmask;
@@ -38,6 +50,10 @@ public class BikePlayer : MonoBehaviour
     [Header("Wall Detection")]
     [SerializeField]
     private LayerMask wallmask;
+
+    [Header("UI Connections")]
+    [SerializeField]
+    private UISpeedometer uispeedometer;
 
     [SerializeField]
     private float rotationsmoothing = 10.0f;
@@ -63,6 +79,8 @@ public class BikePlayer : MonoBehaviour
     private Vector3 tirecolliderinitiallocalpos;
     private float currentmotortorque;
     private Vector3 bikeuprightrot;
+    private float targetbiketilt;
+    private float currentbiketilt;
 
     private Vector3 frontspherecenter;
     private float frontcastgrounddist;
@@ -100,14 +118,18 @@ public class BikePlayer : MonoBehaviour
         framemovementinput = GetMovementInput();
         framehasinput = framemovementinput != Vector2.zero;
 
-        if (framehasinput)
-        {
-            Quaternion targetrotation = Quaternion.LookRotation(lookdirection, Vector3.up) * Quaternion.Euler(bikeuprightrot);
+        currentbiketilt = Mathf.Lerp(currentbiketilt, targetbiketilt, Time.deltaTime * biketiltsmoothing);
+        camera.SetBikeTilt(currentbiketilt);
+
+        //if (framehasinput)
+        //{
+            // -- bike rot
+            Quaternion targetrotation = Quaternion.LookRotation(lookdirection, Vector3.up) * Quaternion.Euler(Vector3.forward * currentbiketilt) * Quaternion.Euler(bikeuprightrot);
             bikemesh.transform.rotation = Quaternion.Slerp(bikemesh.transform.rotation, targetrotation, rotationsmoothing * Time.deltaTime);
 
             if (reversing)
                 bikemesh.transform.localEulerAngles = bikemesh.transform.localEulerAngles.SetY(90f);
-        }
+        //}
     }
 
     private Vector2 GetMovementInput()
@@ -153,21 +175,7 @@ public class BikePlayer : MonoBehaviour
                 PositionPlayerOnPoint(frontspherecenter, frontwheelcol, frontgroundhit);
 
             // -- movement logic
-            Vector3 right = Vector3.right; // change to camera.right later
-            Vector3 forward = Vector3.forward; // change to camera.forward later
-
-            Vector3 framevelocity = CalculateWheelAccel(right * lateralmult, forward);
-            if (framevelocity == Vector3.zero)
-            {
-                currentvelocity *= stopfriction;
-                currentmotortorque *= stopfrictionmotortorque;
-            }
-            else
-            {
-                currentvelocity += framevelocity;
-                currentvelocity = Vector3.ClampMagnitude(currentvelocity, maxspeed);
-                currentmotortorque = Mathf.Clamp(currentmotortorque, -maxmotortorque, maxmotortorque);
-            }
+            MovementLogic();
         }
         else
         {
@@ -179,6 +187,10 @@ public class BikePlayer : MonoBehaviour
 
         transform.position += currentvelocity;
         wasgrounded = grounded;
+
+        // -- set speedometer ui
+        float speedratio = currentvelocity.magnitude / maxspeed;
+        uispeedometer.SetSpeedRatio(speedratio);
     }
 
     private void GroundedCheck(SphereCollider frontcol, SphereCollider backcol, out RaycastHit frontgroundhit, out RaycastHit backgroundhit)
@@ -267,6 +279,37 @@ public class BikePlayer : MonoBehaviour
             runningintowall = true;
     }
 
+    private void MovementLogic()
+    {
+        Vector3 right = Vector3.right; // change to camera.right later
+        Vector3 forward = Vector3.forward; // change to camera.forward later
+
+        // -- accel
+        Vector3 framevelocity = CalculateWheelAccel(forward);
+        if (framevelocity == Vector3.zero)
+        {
+            currentvelocity *= stopfriction;
+            currentmotortorque *= stopfrictionmotortorque;
+        }
+        else
+        {
+            currentvelocity += framevelocity;
+            currentvelocity = Vector3.ClampMagnitude(currentvelocity, maxspeed);
+            currentmotortorque = Mathf.Clamp(currentmotortorque, -maxmotortorque, maxmotortorque);
+        }
+
+        // -- tilt
+        Vector3 tiltvelocity = CalculateBikeTilt(right);
+        if (tiltvelocity == Vector3.zero)
+        {
+            targetbiketilt *= stopfrictionbiketilt;
+        }
+        else
+        {
+            targetbiketilt = Mathf.Clamp(targetbiketilt, -lateraltiltmax, lateraltiltmax);
+        }
+    }
+
     private void ProjectVelocity(Vector3 hitnormal)
     {
         Vector3 wallbinormal = BinormalFromHitNormal(hitnormal);
@@ -281,7 +324,7 @@ public class BikePlayer : MonoBehaviour
         return Vector3.Cross(temp, hitnormal);
     }
 
-    private Vector3 CalculateWheelAccel(Vector3 right, Vector3 forward)
+    private Vector3 CalculateWheelAccel(Vector3 forward)
     {
         Vector3 framemovement = forward * framemovementinput.y;
         framemovement *= acceleration;
@@ -290,6 +333,17 @@ public class BikePlayer : MonoBehaviour
         currentmotortorque += framemovementinput.y * basetorque;
         frontwheel.SetTorque(currentmotortorque);
         backwheel.SetTorque(currentmotortorque);
+
+        return framemovement;
+    }
+
+    private Vector3 CalculateBikeTilt(Vector3 right)
+    {
+        Vector3 framemovement = right * framemovementinput.x;
+        framemovement *= lateralacceleration;
+
+        // -- apply tilt to bike to all wheels
+        targetbiketilt += framemovementinput.x * -lateraltiltamt;
 
         return framemovement;
     }

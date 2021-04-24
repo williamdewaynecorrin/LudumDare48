@@ -18,12 +18,16 @@ public class BikeCamera : MonoBehaviour
     [Range(0f, 1f)]
     [SerializeField]
     private float playerlookweight = 0.5f;
+    [SerializeField]
+    private float biketiltmult = 0.2f;
 
     private Vector3 offsetmax, offsetmin;
     private Vector3 nextpos;
 
     private Quaternion nextrot;
     private Quaternion initialoffsetr;
+
+    private float biketilt;
 
     void Awake()
     {
@@ -42,7 +46,12 @@ public class BikeCamera : MonoBehaviour
 
         // -- update camera rotation
         Vector3 combinedlook = target.transform.forward * (1 - playerlookweight) + (target.transform.position - transform.position).normalized * playerlookweight;
-        nextrot = Quaternion.LookRotation(combinedlook, Vector3.up) * initialoffsetr;
+        nextrot = Quaternion.LookRotation(combinedlook, Vector3.up) * Quaternion.Euler(0f, 0f, biketilt) * initialoffsetr;
         transform.rotation = Quaternion.Slerp(transform.rotation, nextrot, Time.deltaTime * rotationsmoothing);
+    }
+
+    public void SetBikeTilt(float biketilt)
+    {
+        this.biketilt = biketilt * -biketiltmult;
     }
 }
