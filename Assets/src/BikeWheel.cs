@@ -8,6 +8,8 @@ public class BikeWheel : MonoBehaviour
     private MeshRenderer meshrenderer;
     [SerializeField]
     private float torquesmoothing = 10.0f;
+    [SerializeField]
+    private new SphereCollider collider;
 
     private float currenttorque = 0f;
     private float desiredtorque = 0f;
@@ -31,5 +33,10 @@ public class BikeWheel : MonoBehaviour
     public void SetTorque(float torque)
     {
         desiredtorque = torque;
+    }
+
+    public SphereCollider GetCollider()
+    {
+        return collider;
     }
 }

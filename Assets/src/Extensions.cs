@@ -13,4 +13,10 @@ public static class Extensions
     {
         return new Vector3(v.x, 0f, v.z);
     }
+
+    public static Vector3 SetY(this Vector3 v, float y)
+    {
+        v.y = y;
+        return v;
+    }
 }

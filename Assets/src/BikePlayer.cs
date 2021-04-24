@@ -7,11 +7,13 @@ public class BikePlayer : MonoBehaviour
     //==================================================================================================================================================
     // -- Properties
     //==================================================================================================================================================
-    [Header("Wheels")]
+    [Header("Wheels & Bike")]
     [SerializeField]
-    private BikeWheel frontwheelmesh;
+    private Transform bikemesh;
     [SerializeField]
-    private BikeWheel backwheelmesh;
+    private BikeWheel frontwheel;
+    [SerializeField]
+    private BikeWheel backwheel;
     [SerializeField]
     private float maxmotortorque = 1000f;
     [SerializeField]
@@ -31,13 +33,9 @@ public class BikePlayer : MonoBehaviour
 
     [Header("Ground Detection")]
     [SerializeField]
-    private SphereCollider groundsphere;
-    [SerializeField]
     private LayerMask groundmask;
 
     [Header("Wall Detection")]
-    [SerializeField]
-    private SphereCollider wallsphere;
     [SerializeField]
     private LayerMask wallmask;
 
@@ -61,15 +59,21 @@ public class BikePlayer : MonoBehaviour
     private bool grounded = false;
     private bool wasgrounded = false;
     private bool framehasinput = false;
+    private bool reversing = false;
     private Vector3 tirecolliderinitiallocalpos;
     private float currentmotortorque;
     private Vector3 bikeuprightrot;
 
-    private Vector3 spherecenter;
-    private float castdist;
-    private ECurrentGroundStatus groundstatus = ECurrentGroundStatus.InAir;
-    private Vector3 wallspherecenter;
-    private float wallcastdist;
+    private Vector3 frontspherecenter;
+    private float frontcastgrounddist;
+    private float frontcastwalldist;
+
+    private Vector3 backspherecenter;
+    private float backcastgrounddist;
+    private float backcastwalldist;
+
+    private EWheelSelector groundedstatus = EWheelSelector.Neither;
+    private EWheelSelector wallstatus = EWheelSelector.Neither;
     private Vector3 lastwallbinormal;
     private bool runningintowall = false;
 
@@ -79,8 +83,8 @@ public class BikePlayer : MonoBehaviour
     void Awake()
     {
         rigidbody = GetComponent<Rigidbody>();
-        lookdirection = transform.forward;
-        bikeuprightrot = transform.eulerAngles;
+        lookdirection = bikemesh.transform.forward;
+        bikeuprightrot = bikemesh.transform.eulerAngles;
     }
 
     void Start()
@@ -97,21 +101,21 @@ public class BikePlayer : MonoBehaviour
         framehasinput = framemovementinput != Vector2.zero;
 
         if (framehasinput)
-        {                                                                       
-            Vector3 weightedlookdir = lookdirection * (1f - bikeuprightbias) + bikeuprightrot * bikeuprightbias;
-            Quaternion targetrotation = Quaternion.LookRotation(weightedlookdir, Vector3.up);
-            transform.rotation = Quaternion.Slerp(transform.rotation, targetrotation, rotationsmoothing * Time.deltaTime);
+        {
+            Quaternion targetrotation = Quaternion.LookRotation(lookdirection, Vector3.up) * Quaternion.Euler(bikeuprightrot);
+            bikemesh.transform.rotation = Quaternion.Slerp(bikemesh.transform.rotation, targetrotation, rotationsmoothing * Time.deltaTime);
+
+            if (reversing)
+                bikemesh.transform.localEulerAngles = bikemesh.transform.localEulerAngles.SetY(90f);
         }
     }
 
     private Vector2 GetMovementInput()
     {
         float xkeyboardin = Input.GetKey(KeyCode.D) ? 1.0f : (Input.GetKey(KeyCode.A) ? -1.0f : 0.0f);
-        //float xcontrollerin = Input.GetAxis("Horizontal");
         float xin = Mathf.Clamp(xkeyboardin, -1f, 1f);
 
         float ykeyboardin = Input.GetKey(KeyCode.W) ? 1.0f : (Input.GetKey(KeyCode.S) ? -1.0f : 0.0f);
-        //float ycontrollerin = Input.GetAxis("Vertical");
         float yin = Mathf.Clamp(ykeyboardin, -1f, 1f);
 
         return new Vector2(xin, yin);
@@ -122,11 +126,17 @@ public class BikePlayer : MonoBehaviour
     //==================================================================================================================================================
     void FixedUpdate()
     {
+        // -- get wheel colliders and centers
+        SphereCollider frontwheelcol = frontwheel.GetCollider();
+        SphereCollider backwheelcol = backwheel.GetCollider();
+        frontspherecenter = frontwheelcol.transform.position + frontwheelcol.center;
+        backspherecenter = backwheelcol.transform.position + backwheelcol.center;
+
         // -- check for walls
-        WallCheck(out RaycastHit wallhit);
+        WallCheck(frontwheelcol, backwheelcol, out RaycastHit frontwallhit, out RaycastHit backwallhit);
 
         // -- check for grounded
-        GroundedCheck(out RaycastHit groundhit);
+        GroundedCheck(frontwheelcol, backwheelcol, out RaycastHit frontgroundhit, out RaycastHit backgroundhit);
 
         if (grounded)
         {
@@ -136,7 +146,11 @@ public class BikePlayer : MonoBehaviour
             }
 
             rigidbody.velocity = Vector3.zero;
-            PositionPlayerOnPoint(spherecenter, groundhit);
+
+            if(groundedstatus == EWheelSelector.Back)
+                PositionPlayerOnPoint(backspherecenter, backwheelcol, backgroundhit);
+            else
+                PositionPlayerOnPoint(frontspherecenter, frontwheelcol, frontgroundhit);
 
             // -- movement logic
             Vector3 right = Vector3.right; // change to camera.right later
@@ -161,57 +175,110 @@ public class BikePlayer : MonoBehaviour
             rigidbody.velocity += PhysicsManager.gravity;
         }
 
-        transform.position += currentvelocity;
-        if (currentvelocity != Vector3.zero)
-            lookdirection = currentvelocity.normalized;
+        reversing = Vector3.Dot(currentvelocity.normalized, transform.forward) < 0f;
 
+        transform.position += currentvelocity;
         wasgrounded = grounded;
     }
 
-    private void GroundedCheck(out RaycastHit groundhit)
+    private void GroundedCheck(SphereCollider frontcol, SphereCollider backcol, out RaycastHit frontgroundhit, out RaycastHit backgroundhit)
     {
+        // -- reset grounded status
+        groundedstatus = EWheelSelector.Neither;
+
         Vector3 direction = Vector3.down;
-        castdist = Mathf.Max(groundsphere.radius * 1.01f, rigidbody.velocity.OnlyY().magnitude * magicgroundnumber);
-        spherecenter = groundsphere.transform.position + groundsphere.center;
+        frontcastgrounddist = Mathf.Max(frontcol.radius * 1.01f, rigidbody.velocity.OnlyY().magnitude * magicgroundnumber);
+        backcastgrounddist = Mathf.Max(backcol.radius * 1.01f, rigidbody.velocity.OnlyY().magnitude * magicgroundnumber);
 
-        if (Physics.SphereCast(spherecenter, groundsphere.radius, direction, out groundhit, castdist, groundmask, QueryTriggerInteraction.Ignore))
+        // -- front wheel first
+        if (Physics.SphereCast(frontspherecenter, frontcol.radius, direction, out frontgroundhit, frontcastgrounddist, groundmask, QueryTriggerInteraction.Ignore))
         {
-            grounded = true;
-
             // -- do angle test later
-            float angle = Mathf.Abs(Vector3.Angle(groundhit.normal, Vector3.up));
-            groundstatus = ECurrentGroundStatus.Grounded;
+            float angle = Mathf.Abs(Vector3.Angle(frontgroundhit.normal, Vector3.up));
+            groundedstatus = EWheelSelector.Front;
+
+            lookdirection = BinormalFromHitNormal(frontgroundhit.normal).normalized;
         }
-        else
+
+        // -- then back wheel
+        if (Physics.SphereCast(backspherecenter, backcol.radius, direction, out backgroundhit, backcastgrounddist, groundmask, QueryTriggerInteraction.Ignore))
         {
-            grounded = false;
-            groundstatus = ECurrentGroundStatus.InAir;
+            // -- do angle test later
+            float angle = Mathf.Abs(Vector3.Angle(backgroundhit.normal, Vector3.up));
+            groundedstatus = groundedstatus == EWheelSelector.Front ? 
+                             EWheelSelector.Both : EWheelSelector.Back;
+
+            // -- things to only do once per collision here
+            if (groundedstatus == EWheelSelector.Back)
+            {
+                lookdirection = BinormalFromHitNormal(backgroundhit.normal).normalized;
+            }
         }
+
+        if (groundedstatus == EWheelSelector.Neither)
+            grounded = false;
+        else
+            grounded = true;
     }
 
-    private void WallCheck(out RaycastHit wallhit)
+    private void WallCheck(SphereCollider frontcol, SphereCollider backcol, out RaycastHit frontwallhit, out RaycastHit backwallhit)
     {
+        // -- reset wall status
+        wallstatus = EWheelSelector.Neither;
+
         Vector3 direction = currentvelocity.normalized;
-        wallcastdist = Mathf.Max(wallsphere.radius * 1.01f, currentvelocity.magnitude * magicwallnumber);
-        wallspherecenter = wallsphere.transform.position + wallsphere.center;
+        frontcastwalldist = Mathf.Max(frontcol.radius * 1.01f, currentvelocity.magnitude * magicwallnumber);
+        backcastwalldist = Mathf.Max(backcol.radius * 1.01f, currentvelocity.magnitude * magicwallnumber);
 
-        if (Physics.SphereCast(wallspherecenter, wallsphere.radius, direction, out wallhit, wallcastdist, wallmask, QueryTriggerInteraction.Ignore))
+        // -- front wheel first
+        if (Physics.SphereCast(frontspherecenter, frontcol.radius, direction, out frontwallhit, frontcastwalldist, wallmask, QueryTriggerInteraction.Ignore))
         {
-            Vector3 wallnormal = wallhit.normal;
-            Vector3 temp = Vector3.Cross(wallnormal, currentvelocity.normalized);
-            Vector3 wallbinormal = Vector3.Cross(temp, wallnormal);
-            lastwallbinormal = wallbinormal;
-
-            currentvelocity = Vector3.Project(currentvelocity, wallbinormal);
-            transform.position += wallnormal * 0.01f;
+            ProjectVelocity(frontwallhit.normal);
+            transform.position += frontwallhit.normal * 0.01f;
 
             // -- do angle test later
-            float angle = Mathf.Abs(Vector3.Angle(wallnormal, Vector3.up));
+            float angle = Mathf.Abs(Vector3.Angle(frontwallhit.normal, Vector3.up));
 
-            runningintowall = true;
+            wallstatus = EWheelSelector.Front;
         }
-        else
+
+        // -- then back wheel
+        if (Physics.SphereCast(backspherecenter, backcol.radius, direction, out backwallhit, backcastwalldist, wallmask, QueryTriggerInteraction.Ignore))
+        {
+            // -- only project velocity if we didn't just do it
+            if (wallstatus == EWheelSelector.Neither)
+            {
+                ProjectVelocity(backwallhit.normal);
+                transform.position += backwallhit.normal * 0.01f;
+
+                // -- do angle test later
+                float angle = Mathf.Abs(Vector3.Angle(frontwallhit.normal, Vector3.up));
+
+                runningintowall = true;
+                wallstatus = EWheelSelector.Back;
+            }
+            else
+                wallstatus = EWheelSelector.Both;
+        }
+
+        if (wallstatus == EWheelSelector.Neither)
             runningintowall = false;
+        else
+            runningintowall = true;
+    }
+
+    private void ProjectVelocity(Vector3 hitnormal)
+    {
+        Vector3 wallbinormal = BinormalFromHitNormal(hitnormal);
+        lastwallbinormal = wallbinormal;
+
+        currentvelocity = Vector3.Project(currentvelocity, wallbinormal);
+    }
+
+    private Vector3 BinormalFromHitNormal(Vector3 hitnormal)
+    {
+        Vector3 temp = Vector3.Cross(hitnormal, currentvelocity.normalized);
+        return Vector3.Cross(temp, hitnormal);
     }
 
     private Vector3 CalculateWheelAccel(Vector3 right, Vector3 forward)
@@ -221,8 +288,8 @@ public class BikePlayer : MonoBehaviour
 
         // -- apply torque to all wheels
         currentmotortorque += framemovementinput.y * basetorque;
-        frontwheelmesh.SetTorque(currentmotortorque);
-        backwheelmesh.SetTorque(currentmotortorque);
+        frontwheel.SetTorque(currentmotortorque);
+        backwheel.SetTorque(currentmotortorque);
 
         return framemovement;
     }
@@ -232,12 +299,12 @@ public class BikePlayer : MonoBehaviour
 
     }
 
-    private void PositionPlayerOnPoint(Vector3 spherecenter, RaycastHit hit)
+    private void PositionPlayerOnPoint(Vector3 spherecenter, SphereCollider spherecol, RaycastHit hit)
     {
-        Vector3 pointonsphere = spherecenter + (hit.point - spherecenter).normalized * groundsphere.radius;
-        Vector3 pointtobot = (spherecenter + Vector3.down * groundsphere.radius) - pointonsphere;
+        Vector3 pointonsphere = spherecenter + (hit.point - spherecenter).normalized * spherecol.radius;
+        Vector3 pointtobot = (spherecenter + Vector3.down * spherecol.radius) - pointonsphere;
 
-        Vector3 spherecasterbump = -groundsphere.transform.localPosition - groundsphere.center * 1.01f + Vector3.up * groundsphere.radius * 1.01f;
+        Vector3 spherecasterbump = -spherecol.transform.localPosition - spherecol.center * 1.01f + Vector3.up * spherecol.radius * 1.01f;
         transform.position = spherecasterbump + hit.point + pointtobot;
     }
 
@@ -260,28 +327,39 @@ public class BikePlayer : MonoBehaviour
 
         GUI.TextField(baserect, string.Format("Motor Torque: {0}", currentmotortorque));
         baserect.y += debuglineheight;
+
+        GUI.TextField(baserect, string.Format("Reversing?: {0}", reversing));
+        baserect.y += debuglineheight;
     }
 
     private void OnDrawGizmos()
     {
         if (!Application.isPlaying)
             return;
-        
-        // -- red is for ground
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireSphere(spherecenter, groundsphere.radius);
-        Gizmos.DrawLine(spherecenter, spherecenter + Vector3.down * castdist);
 
-        // -- green is for walls
+        SphereCollider frontcol = frontwheel.GetCollider();
+        SphereCollider backcol = backwheel.GetCollider();
+
+        // -- red is for wheels
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(frontspherecenter, frontcol.radius);
+        Gizmos.DrawWireSphere(backspherecenter, backcol.radius);
+
+        // -- red is also for grounded lines
+        Gizmos.DrawLine(frontspherecenter, frontspherecenter + Vector3.down * frontcastgrounddist);
+        Gizmos.DrawLine(backspherecenter, backspherecenter + Vector3.down * backcastgrounddist);
+
+        // -- green is for wall lines
         Gizmos.color = Color.green;
-        Gizmos.DrawWireSphere(wallspherecenter, wallsphere.radius);
-        Gizmos.DrawLine(wallspherecenter, wallspherecenter + currentvelocity.normalized * wallcastdist);
+        Gizmos.DrawLine(frontspherecenter, frontspherecenter + currentvelocity.normalized * frontcastwalldist);
+        Gizmos.DrawLine(backspherecenter, backspherecenter + currentvelocity.normalized * backcastwalldist);
     }
 }
 
-public enum ECurrentGroundStatus
+public enum EWheelSelector
 {
-    InAir = 0,
-    Grounded = 1,
-    OnRamp = 2
+    Neither = 0,
+    Front = 1,
+    Back = 2,
+    Both = 3
 }
