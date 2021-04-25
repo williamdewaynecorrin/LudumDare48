@@ -34,6 +34,10 @@ public class BikePlayer : MonoBehaviour
     private float tiltacceleration = 0.01f;
     [SerializeField]
     private float airmovementmult = 0.075f;
+    [SerializeField]
+    private float jumpstrength = 2.0f;
+    [SerializeField]
+    private float bouncerjumpmult = 4.0f;
 
     [Header("Bike Tilting")]
     [SerializeField]
@@ -75,6 +79,12 @@ public class BikePlayer : MonoBehaviour
     private AudioClip sfxthruststart;
     [SerializeField]
     private AudioClip sfxthrustloop;
+    [SerializeField]
+    private AudioClip sfxdeathfall;
+    [SerializeField]
+    private AudioClip[] sfxwallbumps;
+    [SerializeField]
+    private AudioClip sfxjump;
 
     [SerializeField]
     private float rotationsmoothing = 10.0f;
@@ -118,6 +128,8 @@ public class BikePlayer : MonoBehaviour
     private Vector3 lastwallbinormal;
     private bool runningintowall = false;
     private float speedratio;
+
+    private bool jumped = false;
 
     //==================================================================================================================================================
     // -- Initialization methods
@@ -283,6 +295,7 @@ public class BikePlayer : MonoBehaviour
             float angle = Mathf.Abs(Vector3.Angle(frontwallhit.normal, Vector3.up));
 
             wallstatus = EWheelSelector.Front;
+            SFXManager.PlayRandomClip2D(sfxwallbumps);
         }
 
         // -- then back wheel
@@ -297,8 +310,8 @@ public class BikePlayer : MonoBehaviour
                 // -- do angle test later
                 float angle = Mathf.Abs(Vector3.Angle(frontwallhit.normal, Vector3.up));
 
-                runningintowall = true;
                 wallstatus = EWheelSelector.Back;
+                SFXManager.PlayRandomClip2D(sfxwallbumps);
             }
             else
                 wallstatus = EWheelSelector.Both;
@@ -413,7 +426,7 @@ public class BikePlayer : MonoBehaviour
 
     private void OnGroundLand()
     {
-
+        jumped = false;
     }
 
     private void PositionPlayerOnPoint(Vector3 spherecenter, SphereCollider spherecol, RaycastHit hit, Vector3 spherelocal)
@@ -424,8 +437,6 @@ public class BikePlayer : MonoBehaviour
 
         Vector3 spherecasterbump = -spherelocal - spherecol.center * 1.01f + Vector3.up * spherecol.radius * 1.01f;
         transform.position = spherecasterbump + hit.point + pointtobot;
-
-        Debug.Log("Positioning... : " + transform.position);
     }
 
     private void EmitParticles(float scale)
@@ -437,6 +448,28 @@ public class BikePlayer : MonoBehaviour
             GameObject particleinstance = GameObject.Instantiate(bikeparticlesprefab, bikeparticlestransform.position, bikeparticlestransform.rotation);
             particleinstance.transform.localScale *= Mathf.Clamp(scale, 0.25f, 1.0f);
             GameObject.Destroy(particleinstance.gameObject, 1.2f);
+        }
+    }
+
+    private void Jump(float strength)
+    {
+        Vector3 jumpforce = Vector3.up * strength;
+        rigidbody.velocity = jumpforce;
+        transform.position += (jumpforce) * 0.2f;
+        SFXManager.PlayClip2D(sfxjump);
+
+        jumped = true;
+    }
+
+    //==================================================================================================================================================
+    // -- Unity event methods
+    //==================================================================================================================================================
+    private void OnTriggerEnter(Collider other)
+    {
+        Bouncer bouncer = other.GetComponent<Bouncer>();
+        if(bouncer != null)
+        {
+            Jump(jumpstrength * bouncerjumpmult);
         }
     }
 

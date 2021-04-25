@@ -263,8 +263,8 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: -7584287112203978709, guid: 3539615b25da1664ea473e5be40442e7, type: 3}
-  - {fileID: -6531102545148147421, guid: 3539615b25da1664ea473e5be40442e7, type: 3}
+  - {fileID: 2100000, guid: b3fde39c5485c914dba91087a482d2a4, type: 2}
+  - {fileID: 2100000, guid: 70b5b66969c64274e8d1aac095bd0d33, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -883,8 +883,8 @@ GameObject:
   - component: {fileID: 7007100859467350687}
   - component: {fileID: 6297546047509246094}
   - component: {fileID: 6297546047509246093}
-  - component: {fileID: 6297546047509246095}
   - component: {fileID: 8391541609072209157}
+  - component: {fileID: 9001533027976165812}
   m_Layer: 0
   m_Name: future_bike
   m_TagString: Untagged
@@ -930,9 +930,12 @@ MonoBehaviour:
   camera: {fileID: 0}
   basetorque: 3
   acceleration: 0.002
-  stopfriction: 0.95
+  stopfriction: 0.97
   maxspeed: 1
   tiltacceleration: 0.0001
+  airmovementmult: 0.075
+  jumpstrength: 2
+  bouncerjumpmult: 4
   lateralacceleration: 0.00001
   lateraltiltamt: 15
   lateraltiltmax: 45
@@ -952,6 +955,12 @@ MonoBehaviour:
   bikeaudio: {fileID: 439300980}
   sfxthruststart: {fileID: 8300000, guid: 202b318edf326344d874d4b4be3d7594, type: 3}
   sfxthrustloop: {fileID: 8300000, guid: 6739cc79ca4c21748b8c99d9c511e8ef, type: 3}
+  sfxdeathfall: {fileID: 8300000, guid: d2d02da7a3597c2408cd4a005af9edb0, type: 3}
+  sfxwallbumps:
+  - {fileID: 8300000, guid: 615d500389696fd46a7c12d7514df353, type: 3}
+  - {fileID: 8300000, guid: 52cc2e0f86053024bb95948336626e02, type: 3}
+  - {fileID: 8300000, guid: 63373a581fd54a9438b73e0d584b5790, type: 3}
+  sfxjump: {fileID: 8300000, guid: fd9b3f54348b4db45973ceb4465f4afc, type: 3}
   rotationsmoothing: 10
   bikeuprightbias: 0
   magicgroundnumber: 0.1
@@ -972,19 +981,6 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 2
---- !u!65 &6297546047509246095
-BoxCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6297546047509246092}
-  m_Material: {fileID: 0}
-  m_IsTrigger: 0
-  m_Enabled: 0
-  serializedVersion: 2
-  m_Size: {x: 0.18748201, y: 0.555341, z: 2.3965216}
-  m_Center: {x: 0, y: 0.018292427, z: -0.007478237}
 --- !u!82 &8391541609072209157
 AudioSource:
   m_ObjectHideFlags: 0
@@ -1081,6 +1077,19 @@ AudioSource:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
+--- !u!135 &9001533027976165812
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6297546047509246092}
+  m_Material: {fileID: 0}
+  m_IsTrigger: 1
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 0.98309255
+  m_Center: {x: 0, y: 0, z: 0.09720957}
 --- !u!1 &6447591331238623916
 GameObject:
   m_ObjectHideFlags: 0
@@ -1357,8 +1366,8 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 3270352135621734292, guid: 3539615b25da1664ea473e5be40442e7, type: 3}
-  - {fileID: 1048369163669849221, guid: 3539615b25da1664ea473e5be40442e7, type: 3}
+  - {fileID: 2100000, guid: 65b9c372ab3218d42965a067cb075873, type: 2}
+  - {fileID: 2100000, guid: d6b16f1d7b584e54f8e91dd6f7dba8dc, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1539,8 +1548,8 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 3270352135621734292, guid: 3539615b25da1664ea473e5be40442e7, type: 3}
-  - {fileID: 1048369163669849221, guid: 3539615b25da1664ea473e5be40442e7, type: 3}
+  - {fileID: 2100000, guid: 65b9c372ab3218d42965a067cb075873, type: 2}
+  - {fileID: 2100000, guid: d6b16f1d7b584e54f8e91dd6f7dba8dc, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
