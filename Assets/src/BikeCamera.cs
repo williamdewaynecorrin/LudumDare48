@@ -31,6 +31,10 @@ public class BikeCamera : MonoBehaviour
 
     private float biketilt;
 
+    private bool lookatmode = false;
+    private Vector3 lookattargetpos;
+    private Vector3 lookattarget;
+
     void Awake()
     {
         nextpos = target.transform.position + initialoffset;
@@ -42,6 +46,20 @@ public class BikeCamera : MonoBehaviour
 
     void FixedUpdate()
     {
+        if(lookatmode)
+        {
+            // -- position
+            Vector3 targetpos = lookattargetpos;
+            transform.position = Vector3.Lerp(transform.position, targetpos, Time.deltaTime * positionsmoothing);
+
+            // -- rotation
+            Vector3 lookattarget = this.lookattarget - transform.position;
+            Quaternion lookatend = Quaternion.LookRotation(lookattarget.normalized, Vector3.up);
+            transform.rotation = Quaternion.Slerp(transform.rotation, lookatend, Time.deltaTime * rotationsmoothing);
+
+            return;
+        }
+
         // -- update camera position
         Quaternion behindplayerrot = Quaternion.Euler(0f, yawrot, 0f);
         nextpos = target.transform.position + (behindplayerrot * initialoffset);
@@ -66,6 +84,18 @@ public class BikeCamera : MonoBehaviour
     public void SetPlayerFacing(Vector3 facing)
     {
         playerfacing = facing;
+    }
+
+    public void SetLookAtMode(Vector3 targetposition, Vector3 targetlookat)
+    {
+        lookatmode = true;
+        lookattarget = targetlookat;
+        lookattargetpos = targetposition;
+    }
+
+    public void SetRegularMode()
+    {
+        lookatmode = false;
     }
 
     public Vector3 MovementVectorRight()

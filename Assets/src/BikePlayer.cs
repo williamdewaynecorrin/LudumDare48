@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class BikePlayer : MonoBehaviour
 {
@@ -153,6 +154,10 @@ public class BikePlayer : MonoBehaviour
     private Vector3 currentboostvelocity;
 
     private bool debugconsole = false;
+    private bool levelending = false;
+    private bool dead = false;
+    private Vector3 spawnposition;
+    private Quaternion spawnrotation;
 
     //==================================================================================================================================================
     // -- Initialization methods
@@ -163,6 +168,9 @@ public class BikePlayer : MonoBehaviour
         lookdirection = bikemesh.transform.forward;
         bikeuprightrot = bikemesh.transform.eulerAngles;
         bikeaudio.SetClip(sfxthruststart);
+
+        spawnposition = transform.position;
+        spawnrotation = transform.rotation;
     }
 
     //==================================================================================================================================================
@@ -204,6 +212,12 @@ public class BikePlayer : MonoBehaviour
     //==================================================================================================================================================
     void FixedUpdate()
     {
+        if(dead)
+        {
+            rigidbody.velocity = Vector3.zero;
+            return;
+        }
+
         // -- construct rotation vector for rotating front and back tire colliders to match YAW tilt
         Vector3 velnoy = currentvelocity.NoY().normalized;
         Quaternion bikemeshrotate = Quaternion.LookRotation(velnoy, Vector3.up);
@@ -253,6 +267,8 @@ public class BikePlayer : MonoBehaviour
         }
 
         BoostLogic();
+        if(!levelending)
+            DeathCheck();
 
         reversing = Vector3.Dot(currentvelocity.normalized, camera.MovementVectorForward()) < 0f;
 
@@ -419,16 +435,16 @@ public class BikePlayer : MonoBehaviour
         if (!boosting)
         {
             currentboostvelocity *= booststopfriction;
-            if(boostaudio.State() == ESmartAudioState.Started || boostaudio.State() == ESmartAudioState.Starting)
-                boostaudio.BeginStop(45);
+            //if(boostaudio.State() == ESmartAudioState.Started || boostaudio.State() == ESmartAudioState.Starting)
+            //    boostaudio.BeginStop(45);
         }
         else
         {
             currentboostvelocity += framevelocity;
             currentboostvelocity = Vector3.ClampMagnitude(currentboostvelocity, maxboost);
 
-            if (boostaudio.State() == ESmartAudioState.Stopped || boostaudio.State() == ESmartAudioState.Stopping)
-                boostaudio.BeginStart(sfxboostloop, true, 45);
+            //if (boostaudio.State() == ESmartAudioState.Stopped || boostaudio.State() == ESmartAudioState.Stopping)
+            //    boostaudio.BeginStart(sfxboostloop, true, 45);
 
             EmitBoostParticles();
         }
@@ -540,14 +556,34 @@ public class BikePlayer : MonoBehaviour
         jumped = true;
     }
 
-    private void FinishLevel(string nextlevel)
+    private void FinishLevel(string nextlevel, Vector3 finishpos)
     {
+        levelending = true;
 
+        Vector3 targetpos = camera.transform.position + (finishpos - camera.transform.position).normalized * 0.2f;
+        camera.SetLookAtMode(targetpos ,finishpos);
+        StartCoroutine(EndLevelRoutine(nextlevel));
     }
 
     private void Boost(Vector3 boostdir)
     {
         this.boostdir = boostdir;
+        SFXManager.PlayClip2D(sfxboostloop);
+    }
+
+    private void DeathCheck()
+    {
+        if(transform.position.y <= PhysicsManager.killheight)
+        {
+            dead = true;
+            SFXManager.PlayClip2D(sfxdeathfall);
+            bikemesh.gameObject.SetActive(false);
+
+            Vector3 targetpos = camera.transform.position + (this.transform.position - camera.transform.position).normalized * 0.2f;
+            camera.SetLookAtMode(targetpos, this.transform.position);
+
+            StartCoroutine(RespawnRoutine());
+        }
     }
 
     //==================================================================================================================================================
@@ -564,7 +600,7 @@ public class BikePlayer : MonoBehaviour
         Finish finish = other.GetComponent<Finish>();
         if(finish != null)
         {
-            FinishLevel(finish.nextlevel);
+            FinishLevel(finish.nextlevel, finish.transform.position);
         }
 
         BoostZone boostzone = other.GetComponent<BoostZone>();
@@ -582,6 +618,25 @@ public class BikePlayer : MonoBehaviour
         {
             boosting = false;
         }
+    }
+
+    IEnumerator EndLevelRoutine(string nextlevel)
+    {
+        yield return new WaitForSeconds(2.5f);
+
+        SceneManager.LoadScene(nextlevel);
+    }
+
+    IEnumerator RespawnRoutine()
+    {
+        yield return new WaitForSeconds(3.0f);
+
+        dead = false;
+        bikemesh.gameObject.SetActive(true);
+        camera.SetRegularMode();
+        transform.position = spawnposition;
+        transform.rotation = spawnrotation;
+        lookdirection = transform.rotation.eulerAngles;
     }
 
     //==================================================================================================================================================
