@@ -34,10 +34,18 @@ public class BikePlayer : MonoBehaviour
     private float tiltacceleration = 0.01f;
     [SerializeField]
     private float airmovementmult = 0.075f;
+
+    [Header("Interact Values")]
     [SerializeField]
     private float jumpstrength = 2.0f;
     [SerializeField]
     private float bouncerjumpmult = 4.0f;
+    [SerializeField]
+    private float boostacceleration = 0.01f;
+    [SerializeField]
+    private float maxboost = 0.5f;
+    [SerializeField]
+    private float booststopfriction = 0.8f;
 
     [Header("Bike Tilting")]
     [SerializeField]
@@ -70,15 +78,25 @@ public class BikePlayer : MonoBehaviour
     private Transform bikeparticlestransform;
     [SerializeField]
     private int bikeparticleemitframe = 4;
+    [SerializeField]
+    private GameObject boostparticlesprefab;
+    [SerializeField]
+    private int boostparticleemitframe = 4;
+
     private int bikeparticleemitframetimer = 0;
+    private int boostparticleemitframetimer = 0;
 
     [Header("SFX")]
     [SerializeField]
     private SmartAudio bikeaudio;
     [SerializeField]
+    private SmartAudio boostaudio;
+    [SerializeField]
     private AudioClip sfxthruststart;
     [SerializeField]
     private AudioClip sfxthrustloop;
+    [SerializeField]
+    private AudioClip sfxboostloop;
     [SerializeField]
     private AudioClip sfxdeathfall;
     [SerializeField]
@@ -130,6 +148,11 @@ public class BikePlayer : MonoBehaviour
     private float speedratio;
 
     private bool jumped = false;
+    private bool boosting = false;
+    private Vector3 boostdir;
+    private Vector3 currentboostvelocity;
+
+    private bool debugconsole = false;
 
     //==================================================================================================================================================
     // -- Initialization methods
@@ -160,6 +183,9 @@ public class BikePlayer : MonoBehaviour
 
         if (reversing)
             bikemesh.transform.localEulerAngles = bikemesh.transform.localEulerAngles.SetY(90f);
+
+        if (Input.GetKeyDown(KeyCode.Tilde))
+            debugconsole = !debugconsole;
     }
 
     private Vector2 GetMovementInput()
@@ -226,14 +252,17 @@ public class BikePlayer : MonoBehaviour
             rigidbody.velocity += PhysicsManager.gravity;
         }
 
+        BoostLogic();
+
         reversing = Vector3.Dot(currentvelocity.normalized, camera.MovementVectorForward()) < 0f;
 
-        transform.position += currentvelocity;
+        transform.position += currentvelocity + currentboostvelocity;
         wasgrounded = grounded;
 
         // -- set speedometer ui
-        speedratio = currentvelocity.magnitude / maxspeed;
-        uispeedometer.SetSpeedRatio(speedratio);
+        speedratio = (currentvelocity.magnitude / maxspeed);
+        float fullratio = speedratio * 0.7f + (currentboostvelocity.magnitude / maxboost) * 0.3f;
+        uispeedometer.SetSpeedRatio(fullratio);
     }
 
     private void GroundedCheck(SphereCollider frontcol, SphereCollider backcol, out RaycastHit frontgroundhit, out RaycastHit backgroundhit)
@@ -359,7 +388,7 @@ public class BikePlayer : MonoBehaviour
             if (bikeaudio.State() == ESmartAudioState.Stopped || bikeaudio.State() == ESmartAudioState.Stopping)
                 bikeaudio.BeginStart(sfxthrustloop, true, 45);
 
-            EmitParticles(speedratio);
+            EmitThrustParticles(speedratio);
         }
 
         // -- tilt
@@ -378,6 +407,31 @@ public class BikePlayer : MonoBehaviour
     private void AirMovementLogic()
     {
         MovementLogic(airmovementmult * Mathf.Clamp(rigidbody.velocity.magnitude, 0.1f, 10.0f));
+    }
+
+    private void BoostLogic()
+    {
+        Vector3 forward = boostdir;
+
+        // -- calculate velocity
+        Vector3 framevelocity = CalculateBoostAccel(forward);
+
+        if (!boosting)
+        {
+            currentboostvelocity *= booststopfriction;
+            if(boostaudio.State() == ESmartAudioState.Started || boostaudio.State() == ESmartAudioState.Starting)
+                boostaudio.BeginStop(45);
+        }
+        else
+        {
+            currentboostvelocity += framevelocity;
+            currentboostvelocity = Vector3.ClampMagnitude(currentboostvelocity, maxboost);
+
+            if (boostaudio.State() == ESmartAudioState.Stopped || boostaudio.State() == ESmartAudioState.Stopping)
+                boostaudio.BeginStart(sfxboostloop, true, 45);
+
+            EmitBoostParticles();
+        }
     }
 
     private void ProjectVelocity(Vector3 hitnormal)
@@ -424,6 +478,19 @@ public class BikePlayer : MonoBehaviour
         return framemovement;
     }
 
+    private Vector3 CalculateBoostAccel(Vector3 forward)
+    {
+        Vector3 framemovement = boosting ? forward : Vector3.zero;
+        framemovement *= boostacceleration;
+
+        // -- apply torque to all wheels
+        currentmotortorque += 0.1f * basetorque;
+        frontwheel.SetTorque(currentmotortorque);
+        backwheel.SetTorque(currentmotortorque);
+
+        return framemovement;
+    }
+
     private void OnGroundLand()
     {
         jumped = false;
@@ -439,7 +506,7 @@ public class BikePlayer : MonoBehaviour
         transform.position = spherecasterbump + hit.point + pointtobot;
     }
 
-    private void EmitParticles(float scale)
+    private void EmitThrustParticles(float scale)
     {
         ++bikeparticleemitframetimer;
         if(bikeparticleemitframetimer == bikeparticleemitframe)
@@ -447,6 +514,18 @@ public class BikePlayer : MonoBehaviour
             bikeparticleemitframetimer = 0;
             GameObject particleinstance = GameObject.Instantiate(bikeparticlesprefab, bikeparticlestransform.position, bikeparticlestransform.rotation);
             particleinstance.transform.localScale *= Mathf.Clamp(scale, 0.25f, 1.0f);
+            GameObject.Destroy(particleinstance.gameObject, 1.2f);
+        }
+    }
+
+    private void EmitBoostParticles()
+    {
+        ++boostparticleemitframetimer;
+        if (boostparticleemitframetimer == boostparticleemitframe)
+        {
+            boostparticleemitframetimer = 0;
+            GameObject particleinstance = GameObject.Instantiate(boostparticlesprefab, bikeparticlestransform.position, bikeparticlestransform.rotation);
+            particleinstance.transform.localScale *= Mathf.Clamp(1.0f, 0.25f, 1.0f);
             GameObject.Destroy(particleinstance.gameObject, 1.2f);
         }
     }
@@ -461,6 +540,16 @@ public class BikePlayer : MonoBehaviour
         jumped = true;
     }
 
+    private void FinishLevel(string nextlevel)
+    {
+
+    }
+
+    private void Boost(Vector3 boostdir)
+    {
+        this.boostdir = boostdir;
+    }
+
     //==================================================================================================================================================
     // -- Unity event methods
     //==================================================================================================================================================
@@ -471,6 +560,28 @@ public class BikePlayer : MonoBehaviour
         {
             Jump(jumpstrength * bouncerjumpmult);
         }
+
+        Finish finish = other.GetComponent<Finish>();
+        if(finish != null)
+        {
+            FinishLevel(finish.nextlevel);
+        }
+
+        BoostZone boostzone = other.GetComponent<BoostZone>();
+        if(boostzone != null)
+        {
+            Boost(boostzone.GetBoostDirection());
+            boosting = true;
+        }
+    }
+
+    private void OnTriggerExit(Collider other)
+    {
+        BoostZone boostzone = other.GetComponent<BoostZone>();
+        if (boostzone != null)
+        {
+            boosting = false;
+        }
     }
 
     //==================================================================================================================================================
@@ -478,6 +589,9 @@ public class BikePlayer : MonoBehaviour
     //==================================================================================================================================================
     void OnGUI()
     {
+        if (!debugconsole)
+            return;
+
         float debuglineheight = 26f;
         Rect baserect = new Rect(10f, 10f, 200f, 25f);
 

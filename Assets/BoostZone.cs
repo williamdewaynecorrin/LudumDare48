@@ -4,15 +4,20 @@ using UnityEngine;
 
 public class BoostZone : MonoBehaviour
 {
-    // Start is called before the first frame update
-    void Start()
+    public Transform directiontransform;
+
+    void Awake()
     {
-        
+
     }
 
-    // Update is called once per frame
     void Update()
     {
-        
+
+    }
+
+    public Vector3 GetBoostDirection()
+    {
+        return directiontransform.forward;
     }
 }

@@ -12,6 +12,7 @@ GameObject:
   - component: {fileID: 4607394540136357003}
   - component: {fileID: 4607394540136357004}
   - component: {fileID: 4607394540136357001}
+  - component: {fileID: 2929779891662915038}
   m_Layer: 0
   m_Name: bike_camera
   m_TagString: MainCamera
@@ -103,3 +104,16 @@ MonoBehaviour:
   rotationsmoothing: 10
   playerlookweight: 0.65
   biketiltmult: 0.2
+--- !u!114 &2929779891662915038
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4607394540136357005}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ff26db721962cdf4a8edcdfa9a767d2a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  profile: {fileID: 11400000, guid: ddc516d09037f054aa4d0ea58c9978de, type: 2}

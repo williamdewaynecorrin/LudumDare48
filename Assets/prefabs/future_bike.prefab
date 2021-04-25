@@ -284,6 +284,146 @@ MeshRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
+--- !u!1 &588094224154180201
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7053600636144613924}
+  - component: {fileID: 8255385497905238294}
+  - component: {fileID: 7851814308009441123}
+  m_Layer: 0
+  m_Name: boost_audio
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7053600636144613924
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 588094224154180201}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children: []
+  m_Father: {fileID: 7007100859467350687}
+  m_RootOrder: 4
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!82 &8255385497905238294
+AudioSource:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 588094224154180201}
+  m_Enabled: 1
+  serializedVersion: 4
+  OutputAudioMixerGroup: {fileID: 0}
+  m_audioClip: {fileID: 0}
+  m_PlayOnAwake: 1
+  m_Volume: 1
+  m_Pitch: 1
+  Loop: 0
+  Mute: 0
+  Spatialize: 0
+  SpatializePostEffects: 0
+  Priority: 128
+  DopplerLevel: 1
+  MinDistance: 1
+  MaxDistance: 500
+  Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  BypassListenerEffects: 0
+  BypassReverbZones: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  reverbZoneMixCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0.33333334
+      outWeight: 0.33333334
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+--- !u!114 &7851814308009441123
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 588094224154180201}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 39330c0afebb197448b3dab8f97644f6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1256867565405373861
 GameObject:
   m_ObjectHideFlags: 0
@@ -907,6 +1047,7 @@ Transform:
   - {fileID: 7882659743466234070}
   - {fileID: 7882659743553491187}
   - {fileID: 439300979}
+  - {fileID: 7053600636144613924}
   m_Father: {fileID: 0}
   m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -935,7 +1076,10 @@ MonoBehaviour:
   tiltacceleration: 0.0001
   airmovementmult: 0.075
   jumpstrength: 2
-  bouncerjumpmult: 4
+  bouncerjumpmult: 12
+  boostacceleration: 0.01
+  maxboost: 0.5
+  booststopfriction: 0.8
   lateralacceleration: 0.00001
   lateraltiltamt: 15
   lateraltiltmax: 45
@@ -952,9 +1096,14 @@ MonoBehaviour:
     type: 3}
   bikeparticlestransform: {fileID: 898203973}
   bikeparticleemitframe: 4
+  boostparticlesprefab: {fileID: 1626352942066640663, guid: 297513afbee7df944bd6b22d76af72b9,
+    type: 3}
+  boostparticleemitframe: 4
   bikeaudio: {fileID: 439300980}
+  boostaudio: {fileID: 7851814308009441123}
   sfxthruststart: {fileID: 8300000, guid: 202b318edf326344d874d4b4be3d7594, type: 3}
-  sfxthrustloop: {fileID: 8300000, guid: 6739cc79ca4c21748b8c99d9c511e8ef, type: 3}
+  sfxthrustloop: {fileID: 8300000, guid: 389356be0aa2d284db10b91bd028b847, type: 3}
+  sfxboostloop: {fileID: 8300000, guid: 2eb7daa64706e1e40aa42419e281aeeb, type: 3}
   sfxdeathfall: {fileID: 8300000, guid: d2d02da7a3597c2408cd4a005af9edb0, type: 3}
   sfxwallbumps:
   - {fileID: 8300000, guid: 615d500389696fd46a7c12d7514df353, type: 3}
