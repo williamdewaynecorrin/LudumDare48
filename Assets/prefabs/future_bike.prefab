@@ -754,10 +754,12 @@ MonoBehaviour:
   backwheel: {fileID: 7882659744209040593}
   maxmotortorque: 1000
   stopfrictionmotortorque: 0.95
+  camera: {fileID: 0}
   basetorque: 3
   acceleration: 0.002
   stopfriction: 0.95
   maxspeed: 1
+  tiltacceleration: 0.5
   lateralacceleration: 0.00001
   lateraltiltamt: 15
   lateraltiltmax: 45
@@ -769,6 +771,7 @@ MonoBehaviour:
   wallmask:
     serializedVersion: 2
     m_Bits: 256
+  uispeedometer: {fileID: 0}
   rotationsmoothing: 10
   bikeuprightbias: 0
   magicgroundnumber: 0.1

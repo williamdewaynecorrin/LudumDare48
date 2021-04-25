@@ -101,4 +101,5 @@ MonoBehaviour:
   offsetspringamt: 0
   positionsmoothing: 10
   rotationsmoothing: 10
-  playerlookweight: 0.4
+  playerlookweight: 0.65
+  biketiltmult: 0.2

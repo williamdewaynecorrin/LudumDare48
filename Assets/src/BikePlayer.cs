@@ -30,6 +30,8 @@ public class BikePlayer : MonoBehaviour
     private float stopfriction = 0.7f;
     [SerializeField] 
     private float maxspeed = 0.2f;
+    [SerializeField]
+    private float tiltacceleration = 0.01f;
 
     [Header("Bike Tilting")]
     [SerializeField]
@@ -121,15 +123,17 @@ public class BikePlayer : MonoBehaviour
         currentbiketilt = Mathf.Lerp(currentbiketilt, targetbiketilt, Time.deltaTime * biketiltsmoothing);
         camera.SetBikeTilt(currentbiketilt);
 
-        //if (framehasinput)
-        //{
-            // -- bike rot
-            Quaternion targetrotation = Quaternion.LookRotation(lookdirection, Vector3.up) * Quaternion.Euler(Vector3.forward * currentbiketilt) * Quaternion.Euler(bikeuprightrot);
-            bikemesh.transform.rotation = Quaternion.Slerp(bikemesh.transform.rotation, targetrotation, rotationsmoothing * Time.deltaTime);
+        // -- bike rot
+        Quaternion targetrotation = Quaternion.LookRotation(lookdirection, Vector3.up) * Quaternion.Euler(Vector3.forward * currentbiketilt) * Quaternion.Euler(bikeuprightrot);
+        bikemesh.transform.rotation = Quaternion.Slerp(bikemesh.transform.rotation, targetrotation, rotationsmoothing * Time.deltaTime);
 
-            if (reversing)
-                bikemesh.transform.localEulerAngles = bikemesh.transform.localEulerAngles.SetY(90f);
-        //}
+        if (reversing)
+            bikemesh.transform.localEulerAngles = bikemesh.transform.localEulerAngles.SetY(90f);
+        else
+        {
+            //this.transform.eulerAngles = new Vector3(0f, bikemesh.eulerAngles.y - bikeuprightrot.y, 0f);
+            //bikemesh.transform.eulerAngles = new Vector3(bikemesh.transform.eulerAngles.x, bikeuprightrot.y, bikemesh.transform.eulerAngles.z);
+        }
     }
 
     private Vector2 GetMovementInput()
@@ -148,11 +152,21 @@ public class BikePlayer : MonoBehaviour
     //==================================================================================================================================================
     void FixedUpdate()
     {
+        // -- construct rotation vector for rotating front and back tire colliders to match YAW tilt
+        Vector3 velnoy = currentvelocity.NoY().normalized;
+        Quaternion bikemeshrotate = Quaternion.LookRotation(velnoy, Vector3.up);
+        camera.SetPlayerYAWOffset(bikemeshrotate.eulerAngles.y);
+        camera.SetPlayerFacing(velnoy);
+
         // -- get wheel colliders and centers
         SphereCollider frontwheelcol = frontwheel.GetCollider();
         SphereCollider backwheelcol = backwheel.GetCollider();
-        frontspherecenter = frontwheelcol.transform.position + frontwheelcol.center;
-        backspherecenter = backwheelcol.transform.position + backwheelcol.center;
+
+        Vector3 frontwheellocal = bikemeshrotate * frontwheelcol.transform.localPosition;
+        Vector3 backwheellocal = bikemeshrotate * backwheelcol.transform.localPosition;
+
+        frontspherecenter = transform.position + frontwheellocal + frontwheelcol.center;
+        backspherecenter = transform.position + backwheellocal + backwheelcol.center;
 
         // -- check for walls
         WallCheck(frontwheelcol, backwheelcol, out RaycastHit frontwallhit, out RaycastHit backwallhit);
@@ -167,12 +181,14 @@ public class BikePlayer : MonoBehaviour
                 OnGroundLand();
             }
 
-            rigidbody.velocity = Vector3.zero;
+            //PositionPlayerOnPointBetween(groundedstatus, frontwheelcol, backwheelcol, frontgroundhit, backgroundhit);
 
-            if(groundedstatus == EWheelSelector.Back)
-                PositionPlayerOnPoint(backspherecenter, backwheelcol, backgroundhit);
+            if (groundedstatus == EWheelSelector.Back)
+                PositionPlayerOnPoint(backspherecenter, backwheelcol, backgroundhit, backwheellocal);
             else
-                PositionPlayerOnPoint(frontspherecenter, frontwheelcol, frontgroundhit);
+                PositionPlayerOnPoint(frontspherecenter, frontwheelcol, frontgroundhit, frontwheellocal);
+
+            rigidbody.velocity = Vector3.zero;
 
             // -- movement logic
             MovementLogic();
@@ -183,7 +199,7 @@ public class BikePlayer : MonoBehaviour
             rigidbody.velocity += PhysicsManager.gravity;
         }
 
-        reversing = Vector3.Dot(currentvelocity.normalized, transform.forward) < 0f;
+        reversing = Vector3.Dot(currentvelocity.normalized, camera.MovementVectorForward()) < 0f;
 
         transform.position += currentvelocity;
         wasgrounded = grounded;
@@ -281,11 +297,11 @@ public class BikePlayer : MonoBehaviour
 
     private void MovementLogic()
     {
-        Vector3 right = Vector3.right; // change to camera.right later
-        Vector3 forward = Vector3.forward; // change to camera.forward later
+        Vector3 right = camera.MovementVectorRight();
+        Vector3 forward = camera.MovementVectorForward();
 
         // -- accel
-        Vector3 framevelocity = CalculateWheelAccel(forward);
+        Vector3 framevelocity = CalculateWheelAccel(forward, right);
         if (framevelocity == Vector3.zero)
         {
             currentvelocity *= stopfriction;
@@ -324,23 +340,29 @@ public class BikePlayer : MonoBehaviour
         return Vector3.Cross(temp, hitnormal);
     }
 
-    private Vector3 CalculateWheelAccel(Vector3 forward)
+    private Vector3 CalculateWheelAccel(Vector3 forward, Vector3 right)
     {
         Vector3 framemovement = forward * framemovementinput.y;
         framemovement *= acceleration;
+
+        Vector3 biketiltadd = right * framemovementinput.x;
+        biketiltadd *= Mathf.Abs(currentbiketilt) * tiltacceleration;
+
+        if (true) // not drifting
+            biketiltadd = Quaternion.Euler(0f, -currentbiketilt * tiltacceleration, 0f) * framemovement * tiltacceleration;
+
 
         // -- apply torque to all wheels
         currentmotortorque += framemovementinput.y * basetorque;
         frontwheel.SetTorque(currentmotortorque);
         backwheel.SetTorque(currentmotortorque);
 
-        return framemovement;
+        return framemovement + biketiltadd;
     }
 
     private Vector3 CalculateBikeTilt(Vector3 right)
     {
         Vector3 framemovement = right * framemovementinput.x;
-        framemovement *= lateralacceleration;
 
         // -- apply tilt to bike to all wheels
         targetbiketilt += framemovementinput.x * -lateraltiltamt;
@@ -353,13 +375,32 @@ public class BikePlayer : MonoBehaviour
 
     }
 
-    private void PositionPlayerOnPoint(Vector3 spherecenter, SphereCollider spherecol, RaycastHit hit)
+    private void PositionPlayerOnPoint(Vector3 spherecenter, SphereCollider spherecol, RaycastHit hit, Vector3 spherelocal)
     {
+        // -- lets take the middle between the two spheres as a reference point, instead of only one
         Vector3 pointonsphere = spherecenter + (hit.point - spherecenter).normalized * spherecol.radius;
         Vector3 pointtobot = (spherecenter + Vector3.down * spherecol.radius) - pointonsphere;
 
-        Vector3 spherecasterbump = -spherecol.transform.localPosition - spherecol.center * 1.01f + Vector3.up * spherecol.radius * 1.01f;
+        Vector3 spherecasterbump = -spherelocal - spherecol.center * 1.01f + Vector3.up * spherecol.radius * 1.01f;
         transform.position = spherecasterbump + hit.point + pointtobot;
+
+        Debug.Log("Positioning... : " + transform.position);
+    }
+
+    private void PositionPlayerOnPointBetween(EWheelSelector groundedstatus, SphereCollider frontwheel, SphereCollider backwheel, RaycastHit fronthit, RaycastHit backhit)
+    {
+        Vector3 midpointcenter = backspherecenter + (frontspherecenter - backspherecenter) / 2.0f;
+
+        Vector3 spherecenter = groundedstatus == EWheelSelector.Back ? backspherecenter : frontspherecenter;
+        float radius = groundedstatus == EWheelSelector.Back ? backwheel.radius : frontwheel.radius;
+        Vector3 center = groundedstatus == EWheelSelector.Back ? backwheel.center : frontwheel.center;
+        RaycastHit hit = groundedstatus == EWheelSelector.Back ? backhit : fronthit;
+
+        Vector3 pointonsphere = spherecenter + (hit.point - spherecenter).normalized * radius;
+        Vector3 pointtobot = (spherecenter + Vector3.down * radius) - pointonsphere;
+        Vector3 bump = hit.normal * 0.01f;
+
+        transform.position = bump + hit.point - pointtobot;
     }
 
     //==================================================================================================================================================
