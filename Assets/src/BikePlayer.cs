@@ -32,6 +32,8 @@ public class BikePlayer : MonoBehaviour
     private float maxspeed = 0.2f;
     [SerializeField]
     private float tiltacceleration = 0.01f;
+    [SerializeField]
+    private float airmovementmult = 0.075f;
 
     [Header("Bike Tilting")]
     [SerializeField]
@@ -57,6 +59,23 @@ public class BikePlayer : MonoBehaviour
     [SerializeField]
     private UISpeedometer uispeedometer;
 
+    [Header("FX")]
+    [SerializeField]
+    private GameObject bikeparticlesprefab;
+    [SerializeField]
+    private Transform bikeparticlestransform;
+    [SerializeField]
+    private int bikeparticleemitframe = 4;
+    private int bikeparticleemitframetimer = 0;
+
+    [Header("SFX")]
+    [SerializeField]
+    private SmartAudio bikeaudio;
+    [SerializeField]
+    private AudioClip sfxthruststart;
+    [SerializeField]
+    private AudioClip sfxthrustloop;
+
     [SerializeField]
     private float rotationsmoothing = 10.0f;
     [Range(0f, 1f)]
@@ -72,8 +91,10 @@ public class BikePlayer : MonoBehaviour
     
     private new Rigidbody rigidbody;
     private Vector3 currentvelocity;
+    private Vector3 lasttiltvelocity;
     private Vector3 lookdirection;
     private Vector2 framemovementinput;
+    private bool drifting = false;
     private bool grounded = false;
     private bool wasgrounded = false;
     private bool framehasinput = false;
@@ -96,6 +117,7 @@ public class BikePlayer : MonoBehaviour
     private EWheelSelector wallstatus = EWheelSelector.Neither;
     private Vector3 lastwallbinormal;
     private bool runningintowall = false;
+    private float speedratio;
 
     //==================================================================================================================================================
     // -- Initialization methods
@@ -105,11 +127,7 @@ public class BikePlayer : MonoBehaviour
         rigidbody = GetComponent<Rigidbody>();
         lookdirection = bikemesh.transform.forward;
         bikeuprightrot = bikemesh.transform.eulerAngles;
-    }
-
-    void Start()
-    {
-
+        bikeaudio.SetClip(sfxthruststart);
     }
 
     //==================================================================================================================================================
@@ -119,6 +137,7 @@ public class BikePlayer : MonoBehaviour
     {
         framemovementinput = GetMovementInput();
         framehasinput = framemovementinput != Vector2.zero;
+        drifting = Input.GetKey(KeyCode.LeftShift);
 
         currentbiketilt = Mathf.Lerp(currentbiketilt, targetbiketilt, Time.deltaTime * biketiltsmoothing);
         camera.SetBikeTilt(currentbiketilt);
@@ -129,11 +148,6 @@ public class BikePlayer : MonoBehaviour
 
         if (reversing)
             bikemesh.transform.localEulerAngles = bikemesh.transform.localEulerAngles.SetY(90f);
-        else
-        {
-            //this.transform.eulerAngles = new Vector3(0f, bikemesh.eulerAngles.y - bikeuprightrot.y, 0f);
-            //bikemesh.transform.eulerAngles = new Vector3(bikemesh.transform.eulerAngles.x, bikeuprightrot.y, bikemesh.transform.eulerAngles.z);
-        }
     }
 
     private Vector2 GetMovementInput()
@@ -181,8 +195,6 @@ public class BikePlayer : MonoBehaviour
                 OnGroundLand();
             }
 
-            //PositionPlayerOnPointBetween(groundedstatus, frontwheelcol, backwheelcol, frontgroundhit, backgroundhit);
-
             if (groundedstatus == EWheelSelector.Back)
                 PositionPlayerOnPoint(backspherecenter, backwheelcol, backgroundhit, backwheellocal);
             else
@@ -191,11 +203,14 @@ public class BikePlayer : MonoBehaviour
             rigidbody.velocity = Vector3.zero;
 
             // -- movement logic
-            MovementLogic();
+            MovementLogic(1.0f);
         }
         else
         {
-            // -- gravity logic
+            // -- air movement logic
+            AirMovementLogic();
+
+            // -- add gravity
             rigidbody.velocity += PhysicsManager.gravity;
         }
 
@@ -205,7 +220,7 @@ public class BikePlayer : MonoBehaviour
         wasgrounded = grounded;
 
         // -- set speedometer ui
-        float speedratio = currentvelocity.magnitude / maxspeed;
+        speedratio = currentvelocity.magnitude / maxspeed;
         uispeedometer.SetSpeedRatio(speedratio);
     }
 
@@ -295,35 +310,61 @@ public class BikePlayer : MonoBehaviour
             runningintowall = true;
     }
 
-    private void MovementLogic()
+    private void MovementLogic(float stdmult)
     {
         Vector3 right = camera.MovementVectorRight();
         Vector3 forward = camera.MovementVectorForward();
 
         // -- accel
-        Vector3 framevelocity = CalculateWheelAccel(forward, right);
-        if (framevelocity == Vector3.zero)
+        Vector3 framevelocity = CalculateWheelAccel(forward, right, out bool onlytilt);
+        if (framevelocity == Vector3.zero || onlytilt)
         {
-            currentvelocity *= stopfriction;
+            float stopmult = 1f;
+            float tiltmult = drifting ? 2.0f : 1.0f;
+            if (onlytilt)
+            {
+                currentvelocity += lasttiltvelocity * tiltmult * stdmult;
+                stopmult = 0.975f;
+            }
+
+            currentvelocity *= stopfriction * stopmult * stdmult;
             currentmotortorque *= stopfrictionmotortorque;
+            bikeaudio.BeginStop(45);
         }
         else
         {
-            currentvelocity += framevelocity;
+            Vector3 velocityadd = framevelocity * stdmult;
+            if(drifting)
+            {
+                velocityadd = framevelocity * 0.5f + lasttiltvelocity * 1.2f * stdmult;
+            }
+
+            currentvelocity += velocityadd;
             currentvelocity = Vector3.ClampMagnitude(currentvelocity, maxspeed);
             currentmotortorque = Mathf.Clamp(currentmotortorque, -maxmotortorque, maxmotortorque);
+
+            if (bikeaudio.State() == ESmartAudioState.Stopped || bikeaudio.State() == ESmartAudioState.Stopping)
+                bikeaudio.BeginStart(sfxthrustloop, true, 45);
+
+            EmitParticles(speedratio);
         }
 
         // -- tilt
-        Vector3 tiltvelocity = CalculateBikeTilt(right);
+        Vector3 tiltvelocity = CalculateBikeTilt(right * stdmult);
         if (tiltvelocity == Vector3.zero)
         {
             targetbiketilt *= stopfrictionbiketilt;
         }
         else
         {
-            targetbiketilt = Mathf.Clamp(targetbiketilt, -lateraltiltmax, lateraltiltmax);
+            float tiltmax = drifting ? lateraltiltmax * 1.4f : lateraltiltmax;
+            targetbiketilt = Mathf.Clamp(targetbiketilt, -tiltmax, tiltmax);
         }
+    }
+
+    private void AirMovementLogic()
+    {
+        MovementLogic(airmovementmult * Mathf.Clamp(rigidbody.velocity.magnitude, 0.1f, 10.0f));
     }
 
     private void ProjectVelocity(Vector3 hitnormal)
@@ -340,22 +381,22 @@ public class BikePlayer : MonoBehaviour
         return Vector3.Cross(temp, hitnormal);
     }
 
-    private Vector3 CalculateWheelAccel(Vector3 forward, Vector3 right)
+    private Vector3 CalculateWheelAccel(Vector3 forward, Vector3 right, out bool onlytilt)
     {
         Vector3 framemovement = forward * framemovementinput.y;
         framemovement *= acceleration;
 
         Vector3 biketiltadd = right * framemovementinput.x;
         biketiltadd *= Mathf.Abs(currentbiketilt) * tiltacceleration;
-
-        if (true) // not drifting
-            biketiltadd = Quaternion.Euler(0f, -currentbiketilt * tiltacceleration, 0f) * framemovement * tiltacceleration;
-
+        lasttiltvelocity = biketiltadd;
+        //biketiltadd = Quaternion.Euler(0f, -currentbiketilt * tiltacceleration, 0f) * framemovement * tiltacceleration;
 
         // -- apply torque to all wheels
         currentmotortorque += framemovementinput.y * basetorque;
         frontwheel.SetTorque(currentmotortorque);
         backwheel.SetTorque(currentmotortorque);
+
+        onlytilt = framemovement == Vector3.zero && biketiltadd != Vector3.zero;
 
         return framemovement + biketiltadd;
     }
@@ -387,20 +428,16 @@ public class BikePlayer : MonoBehaviour
         Debug.Log("Positioning... : " + transform.position);
     }
 
-    private void PositionPlayerOnPointBetween(EWheelSelector groundedstatus, SphereCollider frontwheel, SphereCollider backwheel, RaycastHit fronthit, RaycastHit backhit)
+    private void EmitParticles(float scale)
     {
-        Vector3 midpointcenter = backspherecenter + (frontspherecenter - backspherecenter) / 2.0f;
-
-        Vector3 spherecenter = groundedstatus == EWheelSelector.Back ? backspherecenter : frontspherecenter;
-        float radius = groundedstatus == EWheelSelector.Back ? backwheel.radius : frontwheel.radius;
-        Vector3 center = groundedstatus == EWheelSelector.Back ? backwheel.center : frontwheel.center;
-        RaycastHit hit = groundedstatus == EWheelSelector.Back ? backhit : fronthit;
-
-        Vector3 pointonsphere = spherecenter + (hit.point - spherecenter).normalized * radius;
-        Vector3 pointtobot = (spherecenter + Vector3.down * radius) - pointonsphere;
-        Vector3 bump = hit.normal * 0.01f;
-
-        transform.position = bump + hit.point - pointtobot;
+        ++bikeparticleemitframetimer;
+        if(bikeparticleemitframetimer == bikeparticleemitframe)
+        {
+            bikeparticleemitframetimer = 0;
+            GameObject particleinstance = GameObject.Instantiate(bikeparticlesprefab, bikeparticlestransform.position, bikeparticlestransform.rotation);
+            particleinstance.transform.localScale *= Mathf.Clamp(scale, 0.25f, 1.0f);
+            GameObject.Destroy(particleinstance.gameObject, 1.2f);
+        }
     }
 
     //==================================================================================================================================================
