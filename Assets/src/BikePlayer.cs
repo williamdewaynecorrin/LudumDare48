@@ -35,6 +35,8 @@ public class BikePlayer : MonoBehaviour
     private float tiltacceleration = 0.01f;
     [SerializeField]
     private float airmovementmult = 0.075f;
+    [SerializeField]
+    private float anglethreshold = 45f;
 
     [Header("Interact Values")]
     [SerializeField]
@@ -108,6 +110,8 @@ public class BikePlayer : MonoBehaviour
     private AudioClip[] sfxwallbumps;
     [SerializeField]
     private AudioClip sfxjump;
+    [SerializeField]
+    private AudioClip sfxland;
 
     [SerializeField]
     private float rotationsmoothing = 10.0f;
@@ -129,6 +133,7 @@ public class BikePlayer : MonoBehaviour
     private Vector2 framemovementinput;
     private bool drifting = false;
     private bool grounded = false;
+    private bool wallpassesasground = false;
     private bool wasgrounded = false;
     private bool framehasinput = false;
     private bool reversing = false;
@@ -243,17 +248,30 @@ public class BikePlayer : MonoBehaviour
         // -- check for grounded
         GroundedCheck(frontwheelcol, backwheelcol, out RaycastHit frontgroundhit, out RaycastHit backgroundhit);
 
-        if (grounded)
+        if (grounded || wallpassesasground)
         {
+            bool groundfailed = !grounded && wallpassesasground;
+            grounded = true;
+
             if(!wasgrounded)
             {
                 OnGroundLand();
             }
 
-            if (groundedstatus == EWheelSelector.Back)
-                PositionPlayerOnPoint(backspherecenter, backwheelcol, backgroundhit, backwheellocal);
+            if (!groundfailed)
+            {
+                if (groundedstatus == EWheelSelector.Back)
+                    PositionPlayerOnPoint(backspherecenter, backwheelcol, backgroundhit, backwheellocal);
+                else
+                    PositionPlayerOnPoint(frontspherecenter, frontwheelcol, frontgroundhit, frontwheellocal);
+            }
             else
-                PositionPlayerOnPoint(frontspherecenter, frontwheelcol, frontgroundhit, frontwheellocal);
+            {
+                if (wallstatus == EWheelSelector.Back)
+                    PositionPlayerOnPoint(backspherecenter, backwheelcol, backwallhit, backwheellocal);
+                else
+                    PositionPlayerOnPoint(frontspherecenter, frontwheelcol, frontwallhit, frontwheellocal);
+            }
 
             rigidbody.velocity = Vector3.zero;
 
@@ -328,6 +346,7 @@ public class BikePlayer : MonoBehaviour
     {
         // -- reset wall status
         wallstatus = EWheelSelector.Neither;
+        wallpassesasground = false;
 
         Vector3 direction = currentvelocity.normalized;
         frontcastwalldist = Mathf.Max(frontcol.radius * 1.01f, currentvelocity.magnitude * magicwallnumber);
@@ -336,14 +355,26 @@ public class BikePlayer : MonoBehaviour
         // -- front wheel first
         if (Physics.SphereCast(frontspherecenter, frontcol.radius, direction, out frontwallhit, frontcastwalldist, wallmask, QueryTriggerInteraction.Ignore))
         {
-            ProjectVelocity(frontwallhit.normal);
-            transform.position += frontwallhit.normal * 0.01f;
-
-            // -- do angle test later
             float angle = Mathf.Abs(Vector3.Angle(frontwallhit.normal, Vector3.up));
-
-            wallstatus = EWheelSelector.Front;
-            SFXManager.PlayRandomClip2D(sfxwallbumps);
+            Debug.Log("WALL ANGLE: " + angle);
+            if(angle <= anglethreshold)
+            {
+                ProjectVelocity(frontwallhit.normal);
+                transform.position += frontwallhit.normal * 0.01f;
+                wallstatus = EWheelSelector.Front;
+                wallpassesasground = true;
+            }
+            else if( angle <= 91f)
+            {
+                ProjectVelocity(frontwallhit.normal);
+                SFXManager.PlayRandomClip2D(sfxwallbumps);
+                transform.position += frontwallhit.normal * 0.01f;
+            }
+            else
+            {
+                ProjectVelocity(frontwallhit.normal);
+                SFXManager.PlayRandomClip2D(sfxwallbumps);
+            }
         }
 
         // -- then back wheel
@@ -352,14 +383,25 @@ public class BikePlayer : MonoBehaviour
             // -- only project velocity if we didn't just do it
             if (wallstatus == EWheelSelector.Neither)
             {
-                ProjectVelocity(backwallhit.normal);
-                transform.position += backwallhit.normal * 0.01f;
-
-                // -- do angle test later
-                float angle = Mathf.Abs(Vector3.Angle(frontwallhit.normal, Vector3.up));
-
-                wallstatus = EWheelSelector.Back;
-                SFXManager.PlayRandomClip2D(sfxwallbumps);
+                float angle = Mathf.Abs(Vector3.Angle(backwallhit.normal, Vector3.up));
+                if(angle <= anglethreshold)
+                {
+                    ProjectVelocity(backwallhit.normal);
+                    transform.position += backwallhit.normal * 0.01f;
+                    wallstatus = EWheelSelector.Back;
+                    wallpassesasground = true;
+                }
+                else if( angle <= 91f)
+                {
+                    ProjectVelocity(backwallhit.normal);
+                    SFXManager.PlayRandomClip2D(sfxwallbumps);
+                    transform.position += backwallhit.normal * 0.01f;
+                }
+                else
+                {
+                    ProjectVelocity(backwallhit.normal);
+                    SFXManager.PlayRandomClip2D(sfxwallbumps);
+                }
             }
             else
                 wallstatus = EWheelSelector.Both;
@@ -425,7 +467,45 @@ public class BikePlayer : MonoBehaviour
 
     private void AirMovementLogic()
     {
-        MovementLogic(airmovementmult * Mathf.Clamp(rigidbody.velocity.magnitude, 0.1f, 10.0f));
+        Vector3 right = camera.MovementVectorRight();
+        Vector3 forward = camera.MovementVectorForward();
+
+        // -- accel
+        Vector3 framevelocity = CalculateWheelAccel(forward, right, out bool onlytilt);
+        if (framevelocity == Vector3.zero || onlytilt)
+        {
+            currentvelocity += lasttiltvelocity * 0.4f;
+            currentvelocity *= 0.99f;
+        }
+        else
+        {
+            Vector3 velocityadd = framevelocity * 0.05f;
+            if (drifting)
+            {
+                velocityadd = framevelocity * 0.75f + lasttiltvelocity * 0.5f;
+            }
+
+            currentvelocity += velocityadd;
+            currentvelocity = Vector3.ClampMagnitude(currentvelocity, maxspeed);
+            currentmotortorque = Mathf.Clamp(currentmotortorque, -maxmotortorque, maxmotortorque);
+
+            if (bikeaudio.State() == ESmartAudioState.Stopped || bikeaudio.State() == ESmartAudioState.Stopping)
+                bikeaudio.BeginStart(sfxthrustloop, true, 45);
+
+            EmitThrustParticles(speedratio);
+        }
+
+        // -- tilt
+        Vector3 tiltvelocity = CalculateBikeTilt(right * 0.5f);
+        if (tiltvelocity == Vector3.zero)
+        {
+            targetbiketilt *= stopfrictionbiketilt;
+        }
+        else
+        {
+            float tiltmax = drifting ? lateraltiltmax * 1.4f : lateraltiltmax;
+            targetbiketilt = Mathf.Clamp(targetbiketilt, -tiltmax, tiltmax);
+        }
     }
 
     private void BoostLogic()
@@ -513,6 +593,7 @@ public class BikePlayer : MonoBehaviour
     private void OnGroundLand()
     {
         jumped = false;
+        SFXManager.PlayClip2D(sfxland);
     }
 
     private void PositionPlayerOnPoint(Vector3 spherecenter, SphereCollider spherecol, RaycastHit hit, Vector3 spherelocal)

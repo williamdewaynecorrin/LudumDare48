@@ -1025,6 +1025,7 @@ GameObject:
   - component: {fileID: 6297546047509246093}
   - component: {fileID: 8391541609072209157}
   - component: {fileID: 9001533027976165812}
+  - component: {fileID: 1421574403}
   m_Layer: 0
   m_Name: future_bike
   m_TagString: Untagged
@@ -1075,11 +1076,12 @@ MonoBehaviour:
   maxspeed: 1
   tiltacceleration: 0.0001
   airmovementmult: 0.075
+  anglethreshold: 45
   jumpstrength: 2
   bouncerjumpmult: 12
-  boostacceleration: 0.01
+  boostacceleration: 0.075
   maxboost: 0.5
-  booststopfriction: 0.8
+  booststopfriction: 0.992
   lateralacceleration: 0.00001
   lateraltiltamt: 15
   lateraltiltmax: 45
@@ -1113,6 +1115,7 @@ MonoBehaviour:
   - {fileID: 8300000, guid: 52cc2e0f86053024bb95948336626e02, type: 3}
   - {fileID: 8300000, guid: 63373a581fd54a9438b73e0d584b5790, type: 3}
   sfxjump: {fileID: 8300000, guid: fd9b3f54348b4db45973ceb4465f4afc, type: 3}
+  sfxland: {fileID: 8300000, guid: a8ab012ff73bf7b4cbd1a535aff4a811, type: 3}
   rotationsmoothing: 10
   bikeuprightbias: 0
   magicgroundnumber: 0.1
@@ -1131,7 +1134,7 @@ Rigidbody:
   m_UseGravity: 0
   m_IsKinematic: 0
   m_Interpolate: 0
-  m_Constraints: 0
+  m_Constraints: 112
   m_CollisionDetection: 2
 --- !u!82 &8391541609072209157
 AudioSource:
@@ -1242,6 +1245,19 @@ SphereCollider:
   serializedVersion: 2
   m_Radius: 0.98309255
   m_Center: {x: 0, y: 0, z: 0.09720957}
+--- !u!135 &1421574403
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6297546047509246092}
+  m_Material: {fileID: 0}
+  m_IsTrigger: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 0.5560092
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &6447591331238623916
 GameObject:
   m_ObjectHideFlags: 0

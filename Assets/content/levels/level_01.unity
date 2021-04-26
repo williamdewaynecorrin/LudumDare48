@@ -6550,7 +6550,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 0, y: 0, z: NaN, w: 1.05e-43}
+  m_BoundingSphereOverride: {x: 0, y: 0, z: 0, w: 0}
   m_UseBoundingSphereOverride: 0
   m_ShadowRadius: 0
   m_ShadowAngle: 0
@@ -17254,15 +17254,5 @@ PrefabInstance:
       propertyPath: uispeedometer
       value: 
       objectReference: {fileID: 1368241704}
-    - target: {fileID: 6297546047509246094, guid: 87eda003b769c7a439551574a3bd2446,
-        type: 3}
-      propertyPath: boostacceleration
-      value: 0.075
-      objectReference: {fileID: 0}
-    - target: {fileID: 6297546047509246094, guid: 87eda003b769c7a439551574a3bd2446,
-        type: 3}
-      propertyPath: booststopfriction
-      value: 0.992
-      objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 87eda003b769c7a439551574a3bd2446, type: 3}
