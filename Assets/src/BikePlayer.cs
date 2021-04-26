@@ -83,6 +83,8 @@ public class BikePlayer : MonoBehaviour
     private GameObject boostparticlesprefab;
     [SerializeField]
     private int boostparticleemitframe = 4;
+    [SerializeField]
+    private GameObject explosionparticlesprefab;
 
     private int bikeparticleemitframetimer = 0;
     private int boostparticleemitframetimer = 0;
@@ -100,6 +102,8 @@ public class BikePlayer : MonoBehaviour
     private AudioClip sfxboostloop;
     [SerializeField]
     private AudioClip sfxdeathfall;
+    [SerializeField]
+    private AudioClip sfxdeathexplode;
     [SerializeField]
     private AudioClip[] sfxwallbumps;
     [SerializeField]
@@ -167,7 +171,6 @@ public class BikePlayer : MonoBehaviour
         rigidbody = GetComponent<Rigidbody>();
         lookdirection = bikemesh.transform.forward;
         bikeuprightrot = bikemesh.transform.eulerAngles;
-        bikeaudio.SetClip(sfxthruststart);
 
         spawnposition = transform.position;
         spawnrotation = transform.rotation;
@@ -575,15 +578,24 @@ public class BikePlayer : MonoBehaviour
     {
         if(transform.position.y <= PhysicsManager.killheight)
         {
-            dead = true;
             SFXManager.PlayClip2D(sfxdeathfall);
-            bikemesh.gameObject.SetActive(false);
-
-            Vector3 targetpos = camera.transform.position + (this.transform.position - camera.transform.position).normalized * 0.2f;
-            camera.SetLookAtMode(targetpos, this.transform.position);
-
-            StartCoroutine(RespawnRoutine());
+            Die();
         }
+    }
+
+    private void Die()
+    {
+        dead = true;
+        bikemesh.gameObject.SetActive(false);
+
+        Vector3 targetpos = camera.transform.position + (this.transform.position - camera.transform.position).normalized * 0.2f;
+        camera.SetLookAtMode(targetpos, this.transform.position);
+        bikeaudio.StopImmediate();
+
+        GameObject explosioninstance = GameObject.Instantiate(explosionparticlesprefab, this.transform.position, Quaternion.identity);
+        GameObject.Destroy(explosioninstance, 3.0f);
+
+        StartCoroutine(RespawnRoutine());
     }
 
     //==================================================================================================================================================
@@ -594,7 +606,14 @@ public class BikePlayer : MonoBehaviour
         Bouncer bouncer = other.GetComponent<Bouncer>();
         if(bouncer != null)
         {
-            Jump(jumpstrength * bouncerjumpmult);
+            Jump(jumpstrength * bouncerjumpmult * bouncer.mult);
+        }
+
+        KillVolume killvolume = other.GetComponent<KillVolume>();
+        if (killvolume != null)
+        {
+            SFXManager.PlayClip2D(sfxdeathexplode);
+            Die();
         }
 
         Finish finish = other.GetComponent<Finish>();

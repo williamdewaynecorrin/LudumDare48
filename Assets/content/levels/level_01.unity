@@ -6550,7 +6550,7 @@ Light:
   m_BounceIntensity: 1
   m_ColorTemperature: 6570
   m_UseColorTemperature: 0
-  m_BoundingSphereOverride: {x: 0, y: 0, z: 0, w: 0}
+  m_BoundingSphereOverride: {x: 0, y: 0, z: NaN, w: 1.05e-43}
   m_UseBoundingSphereOverride: 0
   m_ShadowRadius: 0
   m_ShadowAngle: 0
@@ -7121,7 +7121,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3e55249ed9df83a4cabcc038c3e26f0e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  nextlevel: test_level_track_01
+  nextlevel: level_02
 --- !u!114 &770397721
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -16994,6 +16994,11 @@ PrefabInstance:
         type: 3}
       propertyPath: m_Pivot.y
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1922648001392250946, guid: 49a98740175c85943b50246545e6d6de,
+        type: 3}
+      propertyPath: levelname
+      value: ENTRY POINT
       objectReference: {fileID: 0}
     m_RemovedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 49a98740175c85943b50246545e6d6de, type: 3}

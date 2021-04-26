@@ -1099,12 +1099,15 @@ MonoBehaviour:
   boostparticlesprefab: {fileID: 1626352942066640663, guid: 297513afbee7df944bd6b22d76af72b9,
     type: 3}
   boostparticleemitframe: 4
+  explosionparticlesprefab: {fileID: 73184155996214729, guid: 1847cb4a65cf960489b0af8a3f0d4143,
+    type: 3}
   bikeaudio: {fileID: 439300980}
   boostaudio: {fileID: 7851814308009441123}
   sfxthruststart: {fileID: 8300000, guid: 202b318edf326344d874d4b4be3d7594, type: 3}
   sfxthrustloop: {fileID: 8300000, guid: 389356be0aa2d284db10b91bd028b847, type: 3}
   sfxboostloop: {fileID: 8300000, guid: 2eb7daa64706e1e40aa42419e281aeeb, type: 3}
   sfxdeathfall: {fileID: 8300000, guid: d2d02da7a3597c2408cd4a005af9edb0, type: 3}
+  sfxdeathexplode: {fileID: 8300000, guid: 85d855aa3c3d94248aea552f5cf3c40d, type: 3}
   sfxwallbumps:
   - {fileID: 8300000, guid: 615d500389696fd46a7c12d7514df353, type: 3}
   - {fileID: 8300000, guid: 52cc2e0f86053024bb95948336626e02, type: 3}
