@@ -115,7 +115,7 @@ public class PlatformerPlayer : MonoBehaviour
         else
         {
             // -- gravity logic
-            rigidbody.velocity += PhysicsManager.gravity;
+            rigidbody.velocity += PhysicsManager.Gravity();
         }
 
         transform.position += currentvelocity;

@@ -194,7 +194,7 @@ public class BikePlayer : MonoBehaviour
         camera.SetBikeTilt(currentbiketilt);
 
         // -- bike rot
-        Quaternion targetrotation = Quaternion.LookRotation(lookdirection, Vector3.up) * Quaternion.Euler(Vector3.forward * currentbiketilt) * Quaternion.Euler(bikeuprightrot);
+        Quaternion targetrotation = Quaternion.LookRotation(lookdirection, PhysicsManager.NormalDir()) * Quaternion.Euler(Vector3.forward * currentbiketilt) * Quaternion.Euler(bikeuprightrot);
         bikemesh.transform.rotation = Quaternion.Slerp(bikemesh.transform.rotation, targetrotation, rotationsmoothing * Time.deltaTime);
 
         if (reversing)
@@ -228,7 +228,7 @@ public class BikePlayer : MonoBehaviour
 
         // -- construct rotation vector for rotating front and back tire colliders to match YAW tilt
         Vector3 velnoy = currentvelocity.NoY().normalized;
-        Quaternion bikemeshrotate = Quaternion.LookRotation(velnoy, Vector3.up);
+        Quaternion bikemeshrotate = Quaternion.LookRotation(velnoy, PhysicsManager.NormalDir());
         camera.SetPlayerYAWOffset(bikemeshrotate.eulerAngles.y);
         camera.SetPlayerFacing(velnoy);
 
@@ -284,7 +284,7 @@ public class BikePlayer : MonoBehaviour
             AirMovementLogic();
 
             // -- add gravity
-            rigidbody.velocity += PhysicsManager.gravity;
+            rigidbody.velocity += PhysicsManager.Gravity();
         }
 
         BoostLogic();
@@ -307,15 +307,15 @@ public class BikePlayer : MonoBehaviour
         // -- reset grounded status
         groundedstatus = EWheelSelector.Neither;
 
-        Vector3 direction = Vector3.down;
-        frontcastgrounddist = Mathf.Max(frontcol.radius * 1.01f, rigidbody.velocity.OnlyY().magnitude * magicgroundnumber);
-        backcastgrounddist = Mathf.Max(backcol.radius * 1.01f, rigidbody.velocity.OnlyY().magnitude * magicgroundnumber);
+        Vector3 direction = PhysicsManager.GravityDir();
+        frontcastgrounddist = Mathf.Max(frontcol.radius * 1.01f, rigidbody.velocity.YOnly().magnitude * magicgroundnumber);
+        backcastgrounddist = Mathf.Max(backcol.radius * 1.01f, rigidbody.velocity.YOnly().magnitude * magicgroundnumber);
 
         // -- front wheel first
         if (Physics.SphereCast(frontspherecenter, frontcol.radius, direction, out frontgroundhit, frontcastgrounddist, groundmask, QueryTriggerInteraction.Ignore))
         {
             // -- do angle test later
-            float angle = Mathf.Abs(Vector3.Angle(frontgroundhit.normal, Vector3.up));
+            float angle = Mathf.Abs(Vector3.Angle(frontgroundhit.normal, PhysicsManager.NormalDir()));
             groundedstatus = EWheelSelector.Front;
 
             lookdirection = BinormalFromHitNormal(frontgroundhit.normal).normalized;
@@ -325,7 +325,7 @@ public class BikePlayer : MonoBehaviour
         if (Physics.SphereCast(backspherecenter, backcol.radius, direction, out backgroundhit, backcastgrounddist, groundmask, QueryTriggerInteraction.Ignore))
         {
             // -- do angle test later
-            float angle = Mathf.Abs(Vector3.Angle(backgroundhit.normal, Vector3.up));
+            float angle = Mathf.Abs(Vector3.Angle(backgroundhit.normal, PhysicsManager.NormalDir()));
             groundedstatus = groundedstatus == EWheelSelector.Front ? 
                              EWheelSelector.Both : EWheelSelector.Back;
 
@@ -355,7 +355,7 @@ public class BikePlayer : MonoBehaviour
         // -- front wheel first
         if (Physics.SphereCast(frontspherecenter, frontcol.radius, direction, out frontwallhit, frontcastwalldist, wallmask, QueryTriggerInteraction.Ignore))
         {
-            float angle = Mathf.Abs(Vector3.Angle(frontwallhit.normal, Vector3.up));
+            float angle = Mathf.Abs(Vector3.Angle(frontwallhit.normal, PhysicsManager.NormalDir()));
             Debug.Log("WALL ANGLE: " + angle);
             if(angle <= anglethreshold)
             {
@@ -383,7 +383,7 @@ public class BikePlayer : MonoBehaviour
             // -- only project velocity if we didn't just do it
             if (wallstatus == EWheelSelector.Neither)
             {
-                float angle = Mathf.Abs(Vector3.Angle(backwallhit.normal, Vector3.up));
+                float angle = Mathf.Abs(Vector3.Angle(backwallhit.normal, PhysicsManager.NormalDir()));
                 if(angle <= anglethreshold)
                 {
                     ProjectVelocity(backwallhit.normal);
@@ -441,8 +441,11 @@ public class BikePlayer : MonoBehaviour
             {
                 velocityadd = framevelocity * 0.5f + lasttiltvelocity * 1.2f * stdmult;
             }
-
             currentvelocity += velocityadd;
+
+            if (framemovementinput.y < 0)
+                currentvelocity *= stopfriction;
+
             currentvelocity = Vector3.ClampMagnitude(currentvelocity, maxspeed);
             currentmotortorque = Mathf.Clamp(currentmotortorque, -maxmotortorque, maxmotortorque);
 
@@ -469,23 +472,27 @@ public class BikePlayer : MonoBehaviour
     {
         Vector3 right = camera.MovementVectorRight();
         Vector3 forward = camera.MovementVectorForward();
+        float stopfrictionair = 0.992f;
 
         // -- accel
         Vector3 framevelocity = CalculateWheelAccel(forward, right, out bool onlytilt);
         if (framevelocity == Vector3.zero || onlytilt)
         {
             currentvelocity += lasttiltvelocity * 0.4f;
-            currentvelocity *= 0.99f;
+            currentvelocity *= stopfrictionair;
         }
         else
         {
-            Vector3 velocityadd = framevelocity * 0.05f;
+            Vector3 velocityadd = framevelocity * 0.12f;
             if (drifting)
             {
                 velocityadd = framevelocity * 0.75f + lasttiltvelocity * 0.5f;
             }
-
             currentvelocity += velocityadd;
+
+            if (framemovementinput.y < 0)
+                currentvelocity *= stopfrictionair;
+
             currentvelocity = Vector3.ClampMagnitude(currentvelocity, maxspeed);
             currentmotortorque = Mathf.Clamp(currentmotortorque, -maxmotortorque, maxmotortorque);
 
@@ -600,9 +607,9 @@ public class BikePlayer : MonoBehaviour
     {
         // -- lets take the middle between the two spheres as a reference point, instead of only one
         Vector3 pointonsphere = spherecenter + (hit.point - spherecenter).normalized * spherecol.radius;
-        Vector3 pointtobot = (spherecenter + Vector3.down * spherecol.radius) - pointonsphere;
+        Vector3 pointtobot = (spherecenter + PhysicsManager.GravityDir() * spherecol.radius) - pointonsphere;
 
-        Vector3 spherecasterbump = -spherelocal - spherecol.center * 1.01f + Vector3.up * spherecol.radius * 1.01f;
+        Vector3 spherecasterbump = -spherelocal - spherecol.center * 1.01f + PhysicsManager.NormalDir() * spherecol.radius * 1.01f;
         transform.position = spherecasterbump + hit.point + pointtobot;
     }
 
@@ -632,7 +639,7 @@ public class BikePlayer : MonoBehaviour
 
     private void Jump(float strength)
     {
-        Vector3 jumpforce = Vector3.up * strength;
+        Vector3 jumpforce = PhysicsManager.NormalDir() * strength;
         rigidbody.velocity = jumpforce;
         transform.position += (jumpforce) * 0.2f;
         SFXManager.PlayClip2D(sfxjump);
@@ -655,6 +662,12 @@ public class BikePlayer : MonoBehaviour
         SFXManager.PlayClip2D(sfxboostloop);
     }
 
+    private void GravityZoneEnter(Vector3 dir, float force)
+    {
+        PhysicsManager.FlipGravity(dir, force);
+        camera.FlipGravity();
+    }
+
     private void DeathCheck()
     {
         if(transform.position.y <= PhysicsManager.killheight)
@@ -675,6 +688,9 @@ public class BikePlayer : MonoBehaviour
 
         GameObject explosioninstance = GameObject.Instantiate(explosionparticlesprefab, this.transform.position, Quaternion.identity);
         GameObject.Destroy(explosioninstance, 3.0f);
+
+        currentvelocity = Vector3.zero;
+        currentboostvelocity = Vector3.zero;
 
         StartCoroutine(RespawnRoutine());
     }
@@ -708,6 +724,12 @@ public class BikePlayer : MonoBehaviour
         {
             Boost(boostzone.GetBoostDirection());
             boosting = true;
+        }
+
+        GravityZone gravzone = other.GetComponent<GravityZone>();
+        if(gravzone != null)
+        {
+            GravityZoneEnter(gravzone.GravityDirection(), gravzone.GravityForce());
         }
     }
 
@@ -780,8 +802,8 @@ public class BikePlayer : MonoBehaviour
         Gizmos.DrawWireSphere(backspherecenter, backcol.radius);
 
         // -- red is also for grounded lines
-        Gizmos.DrawLine(frontspherecenter, frontspherecenter + Vector3.down * frontcastgrounddist);
-        Gizmos.DrawLine(backspherecenter, backspherecenter + Vector3.down * backcastgrounddist);
+        Gizmos.DrawLine(frontspherecenter, frontspherecenter + PhysicsManager.GravityDir() * frontcastgrounddist);
+        Gizmos.DrawLine(backspherecenter, backspherecenter + PhysicsManager.GravityDir() * backcastgrounddist);
 
         // -- green is for wall lines
         Gizmos.color = Color.green;
